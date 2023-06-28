@@ -1,0 +1,16 @@
+name = "LatticeAlgorithms"
+uuid = "a78adfda-4fd7-4d44-a8dc-283d2f23e82b"
+authors = ["Mao Lin <maonlinml@amazon.com>", "Kyungjoo Noh <nkyungjo@amazon.com>"]
+version = "0.1.0"
+
+[deps]
+BlockDiagonals = "0a1fb500-61f7-11e9-3c65-f5ef3456f9f0"
+Counters = "5a653867-b65e-5b16-a095-b1e26d522bbf"
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
