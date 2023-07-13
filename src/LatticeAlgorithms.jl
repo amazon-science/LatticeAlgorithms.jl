@@ -50,5 +50,10 @@ export rep_rec, decode_rep_rec
 export YY_rep_rec, tlq_YY_rep_rec, decode_YY_rep_rec
 include("repetition_codes.jl")
 
+export surface_code_Z_stabilizers, surface_code_X_stabilizers, surface_code_stabilizers
+export surface_code_X_logicals, surface_code_Z_logicals
+export surface_code_Mq, surface_code_Mp, surface_code_M
+include("surface_code.jl")
+
 end # module
 
