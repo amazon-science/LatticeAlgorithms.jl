@@ -11,11 +11,19 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 ## Citation
 If you find our paper or codebase useful, please consider citing us as:
 ```
-@article{lin2023closest,
-  title={Closest lattice point decoding for multimode Gottesman-Kitaev-Preskill codes},
-  author={Lin, Mao and Chamberland, Christopher and Noh, Kyungjoo},
-  journal={arXiv preprint arXiv:2303.04702},
-  year={2023}
+@article{PRXQuantum.4.040334,
+  title = {Closest Lattice Point Decoding for Multimode Gottesman-Kitaev-Preskill Codes},
+  author = {Lin, Mao and Chamberland, Christopher and Noh, Kyungjoo},
+  journal = {PRX Quantum},
+  volume = {4},
+  issue = {4},
+  pages = {040334},
+  numpages = {36},
+  year = {2023},
+  month = {Dec},
+  publisher = {American Physical Society},
+  doi = {10.1103/PRXQuantum.4.040334},
+  url = {https://link.aps.org/doi/10.1103/PRXQuantum.4.040334}
 }
 ```
 
