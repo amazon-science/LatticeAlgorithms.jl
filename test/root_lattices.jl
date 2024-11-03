@@ -16,13 +16,41 @@ using LatticeAlgorithms
 using Test
 using LinearAlgebra
 
-x1 = [-1.8, -1.4, 0.5, 0.0, 1, 2.1, 2.8, 3]
-f1 = [-2, -1, 0, 0, 1, 2, 3, 3] # closest points of x1
-g1 = [-1, -2, 1, 1, 2, 3, 2, 4] # second points of x1
+## Test cases for the old convention
+# x1 = [-1.8, -1.4, 0.5, 0.0, 1, 2.1, 2.8, 3]
+# f1 = [-2, -1, 0, 0, 1, 2, 3, 3] # closest points of x1
+# g1 = [-1, -2, 1, 1, 2, 3, 2, 4] # second points of x1
+# @test closest_integer.(x1) == f1
+# @test second_closest_integer.(x1) == g1
 
-@test closest_integer.(x1) == f1
+## New convention for closest_integer and second_closest_integer
+# Define the closest integers for some test numbers in [0, 1)
+ks = [0.0, 0.1, 0.4, 0.5, 0.6, 0.9]
+test_cases = Dict(
+    0.0 => [0, 1], # The 1st and 2nd closest integers of 0.0
+    0.9 => [1, 0], # The 1st and 2nd closest integers of 1.0
+)
+# The 1st and 2nd closest integers for numbers in [0.0 0.5] (inclusive for both ends) are the same as those for 0.0
+test_cases[0.1] = test_cases[0.0] 
+test_cases[0.4] = test_cases[0.0] 
+test_cases[0.5] = test_cases[0.0] 
 
-@test second_closest_integer.(x1) == g1
+# The 1st and 2nd closest integers for numbers in (0.5, 1.0) (exclusive for both ends) are the same as those for 0.9
+test_cases[0.6] = test_cases[0.9]
+
+# Closest integers outside of [0, 1) are obtained by summing the integer part to the closest integers of its fractional part
+# Define the closest integers for test numbers obtained by shifting the previous test points by some integers
+for i in [-2, -1, 1, 2]
+    for k in ks
+        test_cases[k + i] = test_cases[k] .+ i
+    end
+end
+
+# Run the tests
+for (x, cps) in test_cases
+    cps2 = [closest_integer(x), second_closest_integer(x)]
+    @test cps == cps2
+end
 
 @test Dn(2) == [1 -1; 1 1]
 @test Dn(3) == [1 -1 0; 0 1 -1; 0 1 1]

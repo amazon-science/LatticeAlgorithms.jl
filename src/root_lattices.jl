@@ -15,26 +15,24 @@
 """
     closest_integer(x::Float64)
 
-Return the closest integers to x. In case of a tie, choose the integer with the smallest absolute value.
+Return the closest integers to x. 
+
+Notes: We use f_1(x) to denote the closest integer for x. 
+    f_1(0.5) = 0, 
+    f_1(x) = f_1(x-floor(x)) + floor(x)
 """
-closest_integer(x::Float64) = mod(x, 1)==0.5 ? trunc(Int, x) : round(Int, x) 
+closest_integer(x::Real) = Int(round(x - floor(x)) + floor(x))
 
 """
     function second_closest_integer(x::Float64)
 
-Return the second closest integers to x. In case of a tie, choose the integer with the smallest absolute value.
+Return the second closest integers to x. 
 
-Ref: http://neilsloane.com/doc/Me83.pdf
+Notes: We use f_2(x) to denote the second closest integer for x. 
+    f_2(0.5) = 1, 
+    f_2(x) = f_2(x-floor(x)) + floor(x)
 """
-function second_closest_integer(x::Float64)
-    if x==0.0
-        return 1
-    elseif mod(abs(x),1) <= 0.5
-        return round(Int,sign(x)) * (abs(closest_integer(x))+1)
-    else
-        return round(Int,sign(x)) * (abs(closest_integer(x))-1)
-    end
-end
+second_closest_integer(x::Real) = Int(1 - round(x - floor(x)) + floor(x))
 
 # Zn
 
