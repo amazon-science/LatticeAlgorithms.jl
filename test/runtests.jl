@@ -46,3 +46,27 @@ end
 @testset "repetition_codes" begin
     include("repetition_codes.jl")
 end
+
+@testset "surface_code" begin
+    include("surface_code.jl")
+end
+
+@testset "bsv" begin
+    include("bsv.jl")
+end
+
+@testset "unrotated_surface_code" begin
+    include("unrotated_surface_code.jl")
+end
+
+@testset "color_code" begin
+    include("color_code.jl")
+end
+
+@testset "quantum_information_utils" begin
+    include("quantum_information_utils.jl")
+end
+
+@testset "tn_utils" begin
+    include("tn_utils.jl")
+end
