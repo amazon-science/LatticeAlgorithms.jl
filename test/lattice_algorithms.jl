@@ -88,3 +88,10 @@ for N in 2 : 5
     test_shortest_vector(N)
 end
 
+# Test for closest_points
+
+y1, y2 = closest_points([0.1, 0.1], [1 0; 0 1], 1)
+@test length(y1) == 1
+y1[1] == [0.0,0.0]
+@test length(y2) == 8
+@test Set(y2) == Set([[1.0, 0.0], [0.0, 1.0], [0.0, -1.0], [-1.0, 0.0], [1.0, 1.0], [1.0, -1.0], [-1.0, 1.0], [-1.0, -1.0]])
