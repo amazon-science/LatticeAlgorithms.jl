@@ -32,10 +32,12 @@ export closest_point, shortest_vector, all_closest_points, relevant_vectors
 export closest_points
 include("lattice_algorithms.jl")
 
-export closest_point_Zn, closest_points_Zn, closest_integer, second_closest_integer
+export closest_point_Zn, closest_integer, second_closest_integer
 export closest_point_Dn, Dn, Dn_dual, closest_point_Dn_dual
 export closest_point_scaled_Zn, closest_point_scaled_Dn, closest_point_scaled_Dn_dual
 export An, An_dual, E8, E6, euclidean_dual
+export heaviside, next_closest_integer, next_closest_point_Zn!, closest_points_Zn
+export closest_points_Dn, closest_points_Dn_dual
 include("root_lattices.jl")
 
 
