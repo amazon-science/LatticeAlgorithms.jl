@@ -67,6 +67,15 @@ export bsv_surface_code
 export get_coords_surf_hex, tn_template_surf_hex, tn_surf_hex
 include("surface_code.jl")
 
+export rectangular_surface_code_Z_stabilizers
+export rectangular_surface_code_X_stabilizers
+export rectangular_surface_code_X_logicals
+export rectangular_surface_code_Z_logicals
+export rectangular_surface_code_Mq
+export rectangular_surface_code_Mp
+export rectangular_surface_code_M
+include("rectangular_surface_code.jl")
+
 export unrotated_surface_code_Z_stabilizers
 export unrotated_surface_code_X_stabilizers
 export unrotated_surface_code_Z_logicals
