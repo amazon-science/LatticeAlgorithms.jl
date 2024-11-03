@@ -290,3 +290,76 @@ function canonical_form_of_tridiagonal_anti_symmetric_matrix(A::Matrix)
 end
 
 
+"""
+    get_stabilizer_group_from_generators(generators::Vector{Vector{Int}})
+
+Return the full stabilizer group from the given generators.
+
+Example: 
+    >>> generators = [[1, 4], [4,5,7,8], [2,3,5,6], [6, 9]]
+    >>> get_stabilizer_group_from_generators(generators)
+    >>> 16-element Vector{Vector{Int64}}:
+         []
+         [1, 4]
+         [4, 5, 7, 8]
+         [1, 5, 7, 8]
+         [2, 3, 5, 6]
+         [1, 4, 2, 3, 5, 6]
+         [4, 7, 8, 2, 3, 6]
+         [1, 7, 8, 2, 3, 6]
+         [6, 9]
+         [1, 4, 6, 9]
+         [4, 5, 7, 8, 6, 9]
+         [1, 5, 7, 8, 6, 9]
+         [2, 3, 5, 9]
+         [1, 4, 2, 3, 5, 9]
+         [4, 7, 8, 2, 3, 9]
+         [1, 7, 8, 2, 3, 9]
+"""
+function get_stabilizer_group_from_generators(generators::Vector{Vector{Int}})
+    num_generators = length(generators)
+    stabilizers = Vector{Vector{Int}}()
+    for i in 0 : 2^num_generators - 1
+        occ = digits(i, base=2, pad=num_generators)
+        occ = findall(x->x==1, occ)
+        stabilizer = []
+        for j in occ
+            stabilizer = union(setdiff(stabilizer, generators[j]), setdiff(generators[j], stabilizer))
+        end
+        push!(stabilizers, stabilizer)
+    end
+    return stabilizers
+end
+
+
+"""
+    get_indicators_from_stabilizers(full_stabilizers)
+
+Get the indicators from the full stabilizer group which will be used for the brute-force MLD
+
+Args:
+    full_stabilizers: The full stabilizer group
+
+Returns:
+    indicators: Indicators that will be used for the brute-force MLD
+"""
+function get_indicators_from_stabilizers(full_stabilizers)
+    num_qubits = 0
+    for stabilizer in full_stabilizers
+        num_qubits = max(num_qubits, stabilizer...)
+    end
+    indicators = [zeros(Int, num_qubits) for _ in full_stabilizers] ;
+    for (ind, stab) in enumerate(full_stabilizers)
+        for i in 1 : num_qubits
+            if 2i-1 ∈ stab && 2i ∈ stab
+                indicators[ind][i] = 3
+            elseif 2i-1 ∉ stab && 2i ∈ stab
+                indicators[ind][i] = 2
+            elseif 2i-1 ∈ stab && 2i ∉ stab
+                indicators[ind][i] = 1
+            else
+            end
+        end
+    end
+    return indicators
+end
