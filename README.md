@@ -2,7 +2,8 @@
 
 This package contains lattice algorithms that were used in the paper [Closest lattice point decoding for multimode Gottesman-Kitaev-Preskill codes](https://journals.aps.org/prxquantum/abstract/10.1103/PRXQuantum.4.040334). The package contains several [lattice reduction algorithms](https://www.ant.uni-bremen.de/sixcms/media.php/102/10740/SPM_2011_Wuebben.pdf), such as [Lenstra-Lenstra-Lovász](https://en.wikipedia.org/wiki/Lenstra%E2%80%93Lenstra%E2%80%93Lov%C3%A1sz_lattice_basis_reduction_algorithm) and [Korkine-Zolotarev](https://en.wikipedia.org/wiki/Korkine%E2%80%93Zolotarev_lattice_basis_reduction_algorithm) algorithms, and a [search algorithm](https://publications.lib.chalmers.se/records/fulltext/14990/local_14990.pdf) for solving the [closest point problem](https://en.wikipedia.org/wiki/Lattice_problem#Closest_vector_problem_(CVP)) and the [shortest vector problem](https://en.wikipedia.org/wiki/Lattice_problem#Shortest_vector_problem_(SVP)). For the Gottesman-Kitaev-Preskill (GKP) codes, the package includes  the $D_n$ lattice and two types of repetition-GKP codes, which can be decoded efficiently from a lattice perspective.
 
-
+This package also contains several algorithms that were used in the paper [Exploring the quantum capacity of a Gaussian random displacement channel using
+Gottesman-Kitaev-Preskill codes and maximum likelihood decoding](tbd), including an efficient and exact maximum likelihood decoder (MLD) for surface-square GKP codes, and a tensor-network decoder to approximate the MLD for generic concatenated-GKP codes. The latter is built on top of the decoder in [SweepContractor.jl](https://github.com/chubbc/SweepContractor.jl). 
 
 ## Security
 

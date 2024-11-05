@@ -1,5 +1,5 @@
 In this folder, we provide the code to reproduce the results from the paper [Closest lattice point decoding for multimode Gottesman-Kitaev-Preskill codes
-](https://arxiv.org/abs/2303.04702). 
+](https://journals.aps.org/prxquantum/abstract/10.1103/PRXQuantum.4.040334). 
 
 1. The data used in the paper can be found in the `data/` folder.
 
