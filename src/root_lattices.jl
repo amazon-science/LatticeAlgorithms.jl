@@ -12,29 +12,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# """
+#     closest_integer(x::Float64)
+
+# Return the closest integers to x. In case of a tie, choose the integer with the smallest absolute value.
+# """
+# closest_integer(x::Float64) = mod(x, 1)==0.5 ? trunc(Int, x) : round(Int, x) 
+
+# """
+#     function second_closest_integer(x::Float64)
+
+# Return the second closest integers to x. In case of a tie, choose the integer with the smallest absolute value.
+
+# Ref: http://neilsloane.com/doc/Me83.pdf
+# """
+# function second_closest_integer(x::Float64)
+#     if x==0.0
+#         return 1
+#     elseif mod(abs(x),1) <= 0.5
+#         return round(Int,sign(x)) * (abs(closest_integer(x))+1)
+#     else
+#         return round(Int,sign(x)) * (abs(closest_integer(x))-1)
+#     end
+# end
+
 """
     closest_integer(x::Float64)
 
-Return the closest integers to x. In case of a tie, choose the integer with the smallest absolute value.
+Return the closest integers to x. 
+
+Notes: We use f_1(x) to denote the closest integer for x. 
+    f_1(0.5) = 0, 
+    f_1(x) = f_1(x-floor(x)) + floor(x)
 """
-closest_integer(x::Float64) = mod(x, 1)==0.5 ? trunc(Int, x) : round(Int, x) 
+closest_integer(x::Real) = Int(round(x - floor(x)) + floor(x))
 
 """
     function second_closest_integer(x::Float64)
 
-Return the second closest integers to x. In case of a tie, choose the integer with the smallest absolute value.
+Return the second closest integers to x. 
 
-Ref: http://neilsloane.com/doc/Me83.pdf
+Notes: We use f_2(x) to denote the second closest integer for x. 
+    f_2(0.5) = 1, 
+    f_2(x) = f_2(x-floor(x)) + floor(x)
 """
-function second_closest_integer(x::Float64)
-    if x==0.0
-        return 1
-    elseif mod(abs(x),1) <= 0.5
-        return round(Int,sign(x)) * (abs(closest_integer(x))+1)
-    else
-        return round(Int,sign(x)) * (abs(closest_integer(x))-1)
-    end
-end
+second_closest_integer(x::Real) = Int(1 - round(x - floor(x)) + floor(x))
 
 # Zn
 
@@ -250,3 +272,136 @@ E6() = [
     0 0 -3/2 -√3/2 0 0;
     -1/2 √3/2 -1/2 √3/2 -1/2 √3/2
 ]
+
+
+####### Below for K closest points
+
+heaviside(x::Real) = x > 0 ? 1 : 0
+
+"""
+    next_closest_integer(x::Real, f::Int)
+
+Return the next closest integer for the real number x, given the integer f
+
+Note: We use f_i(x) to denote the i-th closest integer for x. 
+    To fix the ordering of closest integers for the cases where x is integer
+    or half-integer, we choose the following convention 
+
+    f_1(0.5) = 1, 
+    f_{2i}(0) = i, f_{2i-1} = 1-i for i = 1, 2, 3, ...
+    f_i(x) = f_i(x-floor(x)) + floor(x)
+
+    The last one said the closest integer of a
+    real number x is the sum of its integral
+    part to the closest integer of its fractional part, which
+    lies in [0, 1). This leads to the equation used below.
+"""
+next_closest_integer(x::Real, f::Int) = Int(1+2 * floor(x)-f - heaviside(f-floor(x)) + heaviside(x - floor(x) - 1/2))
+
+
+function next_closest_point_Zn!(
+    x::Vector, 
+    previous_closest_points::Vector{Vector{Int}},
+    potential_closest_points::PriorityQueue{Vector{Int}, Float64}
+)
+    if length(previous_closest_points) == 0
+        # Find the first closest point
+        cp = closest_point_Zn(x)
+        push!(previous_closest_points, cp)
+        return cp
+    else
+        cp = previous_closest_points[end]
+        for j in 1 : length(x)
+            cp2 = deepcopy(cp)
+            cp2[j] = next_closest_integer(x[j], cp[j])
+
+            if cp2 ∉ previous_closest_points
+                potential_closest_points[cp2] = norm(cp2 - x) # Put the new candidate into the pool
+            end
+        end
+        new_cp = dequeue!(potential_closest_points) # Find the element in the pool with the shortest distance
+        push!(previous_closest_points, new_cp) 
+        return new_cp
+    end
+end
+
+"""
+    closest_points_Zn(x::Vector, K::Int)
+
+Return the first K closest points in the Zn lattice.
+"""
+function closest_points_Zn(x::Vector, K::Int)
+    if K<=0
+        error("`K` has to be an positive intger.")
+    end
+
+    previous_closest_points = Vector{Vector{Int}}()
+    potential_closest_points = PriorityQueue{Vector{Int}, Float64}()
+
+    for k in 1 : K
+        next_closest_point_Zn!(x, previous_closest_points, potential_closest_points)
+    end
+    return previous_closest_points
+end
+
+"""
+    closest_points_Dn(x::Vector, K::Int)
+
+Return the first K closest points in the Dn lattice.
+"""
+function closest_points_Dn(x::Vector, K::Int)
+    if K<=0
+        error("`K` has to be an positive intger.")
+    end
+
+    previous_closest_points_Zn = Vector{Vector{Int}}()
+    potential_closest_points_Zn = PriorityQueue{Vector{Int}, Float64}()
+
+    previous_closest_points_Dn = Vector{Vector{Int}}()
+
+    for k in 1 : K
+        cp = next_closest_point_Zn!(x, previous_closest_points_Zn, potential_closest_points_Zn)
+        while mod(sum(cp), 2) != 0
+            cp = next_closest_point_Zn!(x, previous_closest_points_Zn, potential_closest_points_Zn)
+        end
+        push!(previous_closest_points_Dn, cp)
+    end
+    return previous_closest_points_Dn
+end
+
+"""
+    closest_points_Dn_dual(x::Vector, K::Int)
+
+Return the first K closest points in the Dn dual lattice.
+"""
+function closest_points_Dn_dual(x::Vector, K::Int)
+    if K<=0
+        error("`K` has to be an positive intger.")
+    end
+
+    χ = closest_point_Zn(x)
+    previous_closest_points_Zn = [χ]
+    potential_closest_points_Zn = PriorityQueue{Vector{Int}, Float64}()
+
+    r1 = 0.5 * ones(length(x))
+    xp = x - r1
+    χp = closest_point_Zn(xp)
+    previous_closest_points_Zn_p = [χp]
+    potential_closest_points_Zn_p = PriorityQueue{Vector{Int}, Float64}()
+
+    cps = Vector{Vector{Real}}() # closest points in Dn_dual
+    for _ in 1 : K
+        χ = previous_closest_points_Zn[end]
+        χp = previous_closest_points_Zn_p[end]
+        dist_χ = norm(χ-x)
+        dist_χp = norm(χp-xp)
+        if dist_χ < dist_χp 
+            push!(cps, χ)
+            next_closest_point_Zn!(x, previous_closest_points_Zn, potential_closest_points_Zn)
+        else
+            push!(cps, χp+r1)
+            next_closest_point_Zn!(xp, previous_closest_points_Zn_p, potential_closest_points_Zn_p)
+        end
+    end
+    return cps
+end

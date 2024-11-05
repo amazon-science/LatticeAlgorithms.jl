@@ -222,3 +222,11 @@ Here the input matrix M is a 2N by 2N matrix and should yield d1=2 and d2=...=dN
 """
 distance(M::Matrix) = min(distances(M)...)
 
+"""
+    gaussian(σ::Float64, x::Vector{Float64})
+
+Return the Gaussian probability of a vector x with variance σ.
+"""
+gaussian(σ::Float64, x::Float64) = 1/√(2π * σ^2) * exp(-x^2 / (2σ^2))
+
+gaussian(σ::Float64, x::Vector{Float64}) = gaussian(σ, norm(x))

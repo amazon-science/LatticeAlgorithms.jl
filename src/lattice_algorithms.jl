@@ -213,3 +213,24 @@ function relevant_vectors(M::Matrix)
 
     return Ntil 
 end
+
+"""
+    closest_points(x::Vector, M, K)
+
+Find K closest points in M for the input vector x.
+"""
+function closest_points(x::Vector, M, K)
+    length(x) != 2 && error("only implemented for 2-dimensional lattice.")
+
+    y = closest_point(x, M)
+
+    u = inv(transpose(M)) * y # y = transpose(M) * u
+
+    us = [[u[1]+i, u[2]+j] for i = -K:K, j=-K:K]
+    us = [us...]
+    ys = [transpose(M) * u for u in us]
+    dists = [norm(y-x) for y in ys]
+    ind = sortperm(dists)
+    ys = ys[ind]
+    return ys[1:K], ys[K+1:end]
+end
