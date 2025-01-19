@@ -1,6 +1,4 @@
-In this folder, we provide the code to reproduce the results from the paper [Exploring the quantum capacity of a Gaussian random displacement channel using
-Gottesman-Kitaev-Preskill codes and maximum likelihood decoding
-](tbd). 
+In this folder, we provide the code to reproduce the results from the paper [Exploring the quantum capacity of a Gaussian random displacement channel using Gottesman-Kitaev-Preskill codes and maximum likelihood decoding](https://arxiv.org/abs/2411.04277). 
 
 1. The data used in the paper can be found in the `data/` folder.
 
