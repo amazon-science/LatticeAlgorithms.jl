@@ -96,7 +96,7 @@ prob_I, prob_X = bsv_unrotated_surface_code_qubit(ϵs, zeros(Int, n))
 @assert (prob_I - log10(1.78283e-27)) < 1e-9 # true
 @assert (prob_X - log10(5.58438e-57)) < 1e-9 # true
 ```
-In the above example, we find the coset probability for a d=25 unrotated surface code with error rate 5%. The results are consistent with those given in [this paper](https://arxiv.org/pdf/1405.4883.pdf) by Bravyi, Suchara and Vargo (BSV, see TABEL I in page 16). The function `bsv_unrotated_surface_code_qubit` relies on a core subroutine `bsv` which is demonstrated below. 
+In the above example, we find the coset probability for a d=25 unrotated surface code with error rate 5%. The results are consistent with those given in [this paper](https://arxiv.org/pdf/1405.4883.pdf) by Bravyi, Suchara and Vargo (BSV, see TABEL I in page 16). The function `bsv_unrotated_surface_code_qubit` relies on a core subroutine `bsv` which is demonstrated below. More details for decoding rotated the (rotated) surface-square GKP code using the exact MLD can be found [here](https://github.com/amazon-science/LatticeAlgorithms.jl/blob/main/examples/papers/Exploring_the_quantum_capacity_of_a_Gaussian_random_displacement_channel_using_GKP_codes_and_maximum_likelihood_decoding/Get_data_bsv_surf_square.ipynb).
 
 
 **Example 6**: Brute force approach decoding and further demonstration of BSV's exact MLD
@@ -117,7 +117,7 @@ expected_coset_prob = sum([prod(ws[stab]) for stab in stabilizers])
 coset_prob_bsv = bsv(ws)
 @assert 10^value ≈ expected_value # true
 ```
-In the above example, we find the coset probability for a d=3 unrotated surface code with two approaches, the brute force approach using the definition and BSV's approach. 
+In the above example, we find the coset probability for a d=3 unrotated surface code with two approaches, the brute force approach using the definition and BSV's approach. More details for decoding [[5-1-3]]-hexagonal GKP code using the brute force approach can be found [here](https://github.com/amazon-science/LatticeAlgorithms.jl/blob/main/examples/papers/Exploring_the_quantum_capacity_of_a_Gaussian_random_displacement_channel_using_GKP_codes_and_maximum_likelihood_decoding/get_data_mld_513_hex_code.ipynb).
 
 **Example 7**: Tensor network decoding to approximate MLD for color-hexagonal GKP code
 ```
@@ -145,7 +145,7 @@ ws = abs.(σ * randn(2n))
 TN, indices = tn_template_color_hex(d)
 lstar2, prob_I2, prob_X2, prob_Y2, prob_Z2, _, _, _, _ = tn_color_hex(ws, σ, TN, indices, bigZ, bigX, χ)
 ```
-In the above example, we find the coset probability for a d=3 color-hexagonal GKP code with a variant of tensor-network decoder, which is built on top of the decoder in [SweepContractor.jl](https://github.com/chubbc/SweepContractor.jl).
+In the above example, we find the coset probability for a d=3 color-hexagonal GKP code with a variant of tensor-network decoder, which is built on top of the decoder in [SweepContractor.jl](https://github.com/chubbc/SweepContractor.jl). More details for decoding color-hexagonal GKP code using the tensor-network approach can be found [here](https://github.com/amazon-science/LatticeAlgorithms.jl/blob/main/examples/papers/Exploring_the_quantum_capacity_of_a_Gaussian_random_displacement_channel_using_GKP_codes_and_maximum_likelihood_decoding/get_data_tn_color_hex.ipynb).
 
 
 
