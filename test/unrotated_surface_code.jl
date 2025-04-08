@@ -70,7 +70,7 @@ end
 
 
 
-# Test case from BSV https://arxiv.org/pdf/1405.4883.pdf, TABEL I in page 16 and TABLE II in page 17
+# Test case from BSV https://arxiv.org/pdf/1405.4883.pdf, TABEL I in page 16
 d = 25
 n = d^2 + (d-1)^2
 
