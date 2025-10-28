@@ -21,9 +21,6 @@ using DataStructures
 using SparseArrays
 using SweepContractor
 
-
-include("utilities.jl")
-
 export lq_reduce, lll, kz
 export islowertriangular, islllreduced, iskzreduced
 include("reductions.jl")
