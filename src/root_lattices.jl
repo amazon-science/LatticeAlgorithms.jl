@@ -221,7 +221,7 @@ closest_point_scaled_Dn_dual(x::Vector, scale::Number) = closest_point_scaled_Dn
 """
     An(N::Int)
 
-Return a representation for the Dn lattice.
+Return a representation for the An lattice.
 
 Note: By definition, the Euclidean Gram matrix of the A-type root lattice, namely An(N)*transpose(An(N)), is equal to Matrix(1I, N, N) + ones(N, N). 
 See Eq. 53 in Chapter 4 of Conway-Sloane

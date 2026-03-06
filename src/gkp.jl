@@ -229,4 +229,4 @@ Return the Gaussian probability of a vector x with variance σ.
 """
 gaussian(σ::Float64, x::Float64) = 1/√(2π * σ^2) * exp(-x^2 / (2σ^2))
 
-gaussian(σ::Float64, x::Vector{Float64}) = gaussian(σ, norm(x))
+gaussian(σ::Float64, xs::Vector{Float64}) = prod([gaussian(σ, x) for x in xs])

@@ -108,6 +108,26 @@ for d in 3:2:19
 end
 
 
+function test_decode_surface_code(d, num_samples=1e2)
+    M = surface_code_M(d)
+    Mperp = GKP_logical_operator_generator(M)
+
+    surface_code_x_stabilizers = surface_code_X_stabilizers(d)
+    surface_code_z_stabilizers = surface_code_Z_stabilizers(d)
+
+    elapsed_time = @elapsed for _ in 1 : num_samples
+        xs = [rand(2d^2) * 2d^2 .- 2d^2/2 for _ in 1 : num_samples]
+        y1s = [closest_point(x, √(2π) * Mperp) for x in xs]
+        y2s = [decode_surface_code(x, surface_code_x_stabilizers, surface_code_z_stabilizers)[1] for x in xs]
+        @test y1s ≈ y2s
+    end
+    # println("test_decode_surface_code for d = $d, elapsed_time=$elapsed_time")
+end
+
+for d in [3]
+    test_decode_surface_code(d)
+end
+
 drange = [3,5]
 num_samples = 1e3
 for d in drange

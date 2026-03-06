@@ -73,7 +73,7 @@ function brute_force_mld_concatenated_square(ηs_q, σ, logical, full_stabilizer
 end
 
 """
-    get_ws_non_square(ηs, σ; S_T = [2 0; 1 sqrt(3)] / (12)^(1/4), Nv=5)
+    get_ws_non_square(ηs, σ; S = [2 1; 0 sqrt(3)] / (12)^(1/4), Nv=5)
 
 Return the weights for the concatenated-square GKP code.
 

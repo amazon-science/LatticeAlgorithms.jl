@@ -21,6 +21,17 @@ using DataStructures
 using SparseArrays
 using SweepContractor
 
+using PythonCall
+const pymatching = PythonCall.pynew()
+
+function __init__()
+    # copied from PyPlotCall.jl
+    PythonCall.pycopy!(pymatching, pyimport("pymatching"))
+    return
+end
+
+include("utilities.jl")
+
 export lq_reduce, lll, kz
 export islowertriangular, islllreduced, iskzreduced
 include("reductions.jl")
@@ -60,8 +71,12 @@ include("repetition_codes.jl")
 export surface_code_Z_stabilizers, surface_code_X_stabilizers, surface_code_stabilizers
 export surface_code_X_logicals, surface_code_Z_logicals
 export surface_code_Mq, surface_code_Mp, surface_code_M
+export decode_surface_code
+export decode_surface_rectangular_GKP_code
 export bsv_surface_code
 export get_coords_surf_hex, tn_template_surf_hex, tn_surf_hex
+export mwms_surface_square, mwms_surface_square_v2
+export mwms_surface_hexagonal
 include("surface_code.jl")
 
 export rectangular_surface_code_Z_stabilizers
@@ -73,15 +88,29 @@ export rectangular_surface_code_Mp
 export rectangular_surface_code_M
 include("rectangular_surface_code.jl")
 
+
 export unrotated_surface_code_Z_stabilizers
 export unrotated_surface_code_X_stabilizers
 export unrotated_surface_code_Z_logicals
 export unrotated_surface_code_X_logicals
 export unrotated_surface_code_Mq, unrotated_surface_code_Mp
 export unrotated_surface_code_M
+export decode_unrotated_surface_rectangular_GKP_code
+export decode_unrotated_surface_code
 export bsv_unrotated_surface_code
 export bsv_unrotated_surface_code_qubit
 include("unrotated_surface_code.jl")
+
+export decode_concatenated_GKP_code, decode_concatenated_rectangular_GKP_code
+include("concatenated_code.jl")
+
+
+export mwpm
+export decoding_graph
+export shortest_path, minimum_weight_cycle, mwm, mwms
+export shortest_paths
+export decoding_graph_v2, mwm_v2, mwms_v2, get_next_matching
+include("matching_utils.jl")
 
 export bsv
 include("bsv.jl")
@@ -114,6 +143,11 @@ export brute_force_mld_concatenated_square
 export brute_force_mld_concatenated_non_square
 export sweep_contract_v2!
 include("tn_utils.jl")
+
+export xzzx_code_stabilizers, xzzx_code_M
+export xzzx_code_X_logicals, xzzx_code_Z_logicals
+export decode_xzzx_code, decode_xzzx_rectangular_GKP_code
+include("xzzx_code.jl")
 
 end # module
 
