@@ -1,7 +1,4 @@
-In this folder, we provide the code to reproduce the plots from the paper *Approximate maximum likelihood decoding with $K$ minimum weight matchings* (To appear soon). 
+The purposes of the notebooks are the following
 
-1. The data used in the paper can be found in the `data/` folder.
-
-2. The plots used in the paper can be found in the `plots/` folder.
-
-3. To reproduce the figures in the paper with existing data, simply run "Figs_*.ipynb"
+1. "xx" for reproducing the figures in "plots", using the data in the folder "data"
+2. "get_data_bsv_surf_square.ipynb" for reproducing "data/bsv_3_23_0.596_0.607_1e7.jld2"

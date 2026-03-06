@@ -62,7 +62,7 @@ T3, L3, Q3 = kz_basis.T, kz_basis.L, kz_basis.Q
 # Massive test 
 
 
-function test_reduction(N::Integer, method::String, samples::Integer=Int(1e2))
+function test_reduction(N::Integer, method::String; samples::Integer=Int(1e2))
     elapsed_time = @elapsed for _ in 1 : samples
 
         M = rand(N, N) * N .- N/2
@@ -86,8 +86,7 @@ function test_reduction(N::Integer, method::String, samples::Integer=Int(1e2))
     # println("test_reduction N=$N, elapsed_time=$elapsed_time")
 end
 
-for N in 1 : 6
-    test_reduction(N, "LLL")
-    test_reduction(N, "LQ")
-    # test_reduction(N, "KZ")
-end
+@time [test_reduction(N, "LLL"; samples=Int(1e4)) for N in 1:15] ;
+@time [test_reduction(N, "LQ"; samples=Int(1e4)) for N in 1:15] ;
+
+# @time [test_reduction(N, "KZ"; samples=Int(1e4)) for N in 1:5] ;
