@@ -55,16 +55,6 @@ using Test
 @test abs(det(triangular_color_code_M(3))) ≈ 2
 @test abs(det(triangular_color_code_M(5))) ≈ 2
 
-# function test_triangular_color_code_distances(d)
-#     ds = distances(triangular_color_code_M(d))
-#     @test ds[1]≈ds[2]
-#     @test ds[1]≈ds[3]
-# end
-
-# for d in [3]
-#     test_triangular_color_code_distances(d)
-# end
-
 ## Octagonal color codes
 
 @test octagonal_color_code_num_qubits(2) == 8
