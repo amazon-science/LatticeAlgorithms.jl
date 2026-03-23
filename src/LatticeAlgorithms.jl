@@ -144,10 +144,5 @@ export brute_force_mld_concatenated_non_square
 export sweep_contract_v2!
 include("tn_utils.jl")
 
-export xzzx_code_stabilizers, xzzx_code_M
-export xzzx_code_X_logicals, xzzx_code_Z_logicals
-export decode_xzzx_code, decode_xzzx_rectangular_GKP_code
-include("xzzx_code.jl")
-
 end # module
 

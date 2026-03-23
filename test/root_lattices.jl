@@ -16,13 +16,6 @@ using LatticeAlgorithms
 using Test
 using LinearAlgebra
 
-## Test cases for the old convention
-# x1 = [-1.8, -1.4, 0.5, 0.0, 1, 2.1, 2.8, 3]
-# f1 = [-2, -1, 0, 0, 1, 2, 3, 3] # closest points of x1
-# g1 = [-1, -2, 1, 1, 2, 3, 2, 4] # second points of x1
-# @test closest_integer.(x1) == f1
-# @test second_closest_integer.(x1) == g1
-
 ## New convention for closest_integer and second_closest_integer
 # Define the closest integers for some test numbers in [0, 1)
 ks = [0.0, 0.1, 0.4, 0.5, 0.6, 0.9]

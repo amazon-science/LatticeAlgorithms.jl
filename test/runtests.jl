@@ -80,7 +80,3 @@ end
 @testset "tn_utils" begin
     include("tn_utils.jl")
 end
-
-@testset "xzzx_code" begin
-    include("xzzx_code.jl")
-end
