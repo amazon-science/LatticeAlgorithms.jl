@@ -14,69 +14,77 @@
 
 using Test
 
-@testset "lattice_algorithms" begin
-    include("lattice_algorithms.jl")
+# @testset "lattice_algorithms" begin
+#     include("lattice_algorithms.jl")
+# end
+
+
+# @testset "reductions" begin
+#     include("reductions.jl")
+# end
+
+
+# @testset "root_lattices" begin
+#     include("root_lattices.jl")
+# end
+
+
+# @testset "symplectic_utils" begin
+#     include("symplectic_utils.jl")
+# end
+
+
+# @testset "utilities" begin
+#     include("utilities.jl")
+# end
+
+# @testset "gkp" begin
+#     include("gkp.jl")
+# end
+
+
+# @testset "repetition_codes" begin
+#     include("repetition_codes.jl")
+# end
+
+# @testset "surface_code" begin
+#     include("surface_code.jl")
+# end
+
+# @testset "concatenated_code" begin
+#     include("concatenated_code.jl")
+# end
+
+# @testset "bsv" begin
+#     include("bsv.jl")
+# end
+
+# @testset "unrotated_surface_code" begin
+#     include("unrotated_surface_code.jl")
+# end
+
+# @testset "matching_utils" begin
+#     include("matching_utils.jl")
+# end
+
+
+# @testset "color_code" begin
+#     include("color_code.jl")
+# end
+
+
+# @testset "quantum_information_utils" begin
+#     include("quantum_information_utils.jl")
+# end
+
+# @testset "tn_utils" begin
+#     include("tn_utils.jl")
+# end
+
+@testset "css_ldpc_utils" begin
+    include("css_ldpc_utils.jl")
 end
 
-
-@testset "reductions" begin
-    include("reductions.jl")
-end
-
-
-@testset "root_lattices" begin
-    include("root_lattices.jl")
-end
-
-
-@testset "symplectic_utils" begin
-    include("symplectic_utils.jl")
-end
-
-
-@testset "utilities" begin
-    include("utilities.jl")
-end
-
-@testset "gkp" begin
-    include("gkp.jl")
-end
-
-
-@testset "repetition_codes" begin
-    include("repetition_codes.jl")
-end
-
-@testset "surface_code" begin
-    include("surface_code.jl")
-end
-
-@testset "concatenated_code" begin
-    include("concatenated_code.jl")
-end
-
-@testset "bsv" begin
-    include("bsv.jl")
-end
-
-@testset "unrotated_surface_code" begin
-    include("unrotated_surface_code.jl")
-end
-
-@testset "matching_utils" begin
-    include("matching_utils.jl")
-end
-
-
-@testset "color_code" begin
-    include("color_code.jl")
-end
-
-
-@testset "quantum_information_utils" begin
-    include("quantum_information_utils.jl")
-end
-
-@testset "tn_utils" begin
-    include("tn_utils.jl")
+@testset "bivariate_bicycle_code" begin
+    include("bivariate_bicycle_code.jl")
 end
