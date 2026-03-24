@@ -141,6 +141,7 @@ export sweep_contract_v2!
 include("tn_utils.jl")
 
 export gf2_rref, gf2_nullspace, gf2_inverse
+export gf2_rref_with_rhs
 export css_stabilizers_from_check_matrix, css_generator_from_check_matrix, css_logicals, css_distance
 include("css_ldpc_utils.jl")
 
@@ -151,5 +152,8 @@ export bb_X_stabilizers, bb_Z_stabilizers, bb_stabilizers
 export bb_X_logicals, bb_Z_logicals
 export bb_Mq, bb_Mp, bb_M
 include("bivariate_bicycle_code.jl")
+
+export bp_osd_cs_decode
+include("bp_osd_cs.jl")
 
 end # module

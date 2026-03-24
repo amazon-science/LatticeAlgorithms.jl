@@ -157,6 +157,50 @@ function gf2_inverse(M::AbstractMatrix{<:Integer})
     return A[:, num_cols+1:end]
 end
 
+
+function gf2_rref_with_rhs(H::AbstractMatrix{<:Integer}, s::AbstractVector{<:Integer})
+    A = hcat(mod.(Int64.(H), 2), reshape(mod.(Int64.(s), 2), :, 1))
+    num_rows, num_cols_plus_rhs = size(A)
+    num_cols = num_cols_plus_rhs - 1
+
+    pivots = Int64[]
+    row_idx = 1
+
+    for col_idx in 1:num_cols
+        pivot_row = nothing
+        for i in row_idx:num_rows
+            if A[i, col_idx] == 1
+                pivot_row = i
+                break
+            end
+        end
+
+        if isnothing(pivot_row)
+            continue
+        end
+
+        if pivot_row != row_idx
+            A[row_idx, :], A[pivot_row, :] = copy(A[pivot_row, :]), copy(A[row_idx, :])
+        end
+
+        for i in 1:num_rows
+            if i != row_idx && A[i, col_idx] == 1
+                A[i, :] = mod.(A[i, :] .+ A[row_idx, :], 2)
+            end
+        end
+
+        push!(pivots, col_idx)
+        row_idx += 1
+
+        if row_idx > num_rows
+            break
+        end
+    end
+
+    return A[:, 1:num_cols], vec(A[:, num_cols + 1]), pivots
+end
+
+
 """
     css_stabilizers_from_check_matrix(H::AbstractMatrix{<:Integer})
 
