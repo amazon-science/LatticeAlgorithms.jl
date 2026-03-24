@@ -140,16 +140,16 @@ export brute_force_mld_concatenated_non_square
 export sweep_contract_v2!
 include("tn_utils.jl")
 
-include("css_ldpc_utils.jl")
 export gf2_rref, gf2_nullspace, gf2_inverse
-export css_stabilizers_from_check_matrix, css_generator_from_check_matrix, css_logicals
+export css_stabilizers_from_check_matrix, css_generator_from_check_matrix, css_logicals, css_distance
+include("css_ldpc_utils.jl")
 
-include("bivariate_bicycle_code.jl")
 export bb_cyclic_shift_matrix, bb_x_matrix, bb_y_matrix
-export bb_matrices, bb_check_matrices
+export bb_A_matrix, bb_B_matrix, bb_matrices, bb_check_matrices
 export bb_num_data_qubits, bb_num_logicals, bb_parameters
 export bb_X_stabilizers, bb_Z_stabilizers, bb_stabilizers
 export bb_X_logicals, bb_Z_logicals
 export bb_Mq, bb_Mp, bb_M
+include("bivariate_bicycle_code.jl")
 
 end # module

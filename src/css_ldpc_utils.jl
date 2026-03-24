@@ -273,3 +273,135 @@ function css_logicals(HX::AbstractMatrix{<:Integer}, HZ::AbstractMatrix{<:Intege
 
     return X_basis, Z_basis
 end
+
+"""
+    css_distance(HX::AbstractMatrix{<:Integer}, HZ::AbstractMatrix{<:Integer};
+                 max_weight=nothing, sector=:both)
+
+Return the CSS code distance determined by the binary check matrices `HX` and `HZ`.
+
+The keyword `sector` controls which logical sector is searched:
+- `sector = :both`: compute both `dX` and `dZ`, and return `min(dX, dZ)`
+- `sector = :Z`: compute only the minimum weight of a nontrivial `Z` logical in
+  `ker(HX) \\ rowspace(HZ)`
+- `sector = :X`: compute only the minimum weight of a nontrivial `X` logical in
+  `ker(HZ) \\ rowspace(HX)`
+
+This implementation searches by increasing logical-basis coefficient weight, so
+it is exact, but it is only practical when the true distance is reasonably
+small. The optional keyword `max_weight` can be used to stop the search early.
+In that case:
+- if a logical operator of weight at most `max_weight` is found, its exact
+  weight is returned;
+- otherwise `nothing` is returned.
+"""
+function css_distance(
+    HX::AbstractMatrix{<:Integer},
+    HZ::AbstractMatrix{<:Integer};
+    max_weight=nothing,
+    sector::Symbol=:both,
+)
+    if size(HX, 2) != size(HZ, 2)
+        error("HX and HZ must have the same number of columns.")
+    end
+
+    if any(mod.(HX * transpose(HZ), 2) .!= 0)
+        error("HX and HZ do not define a CSS code because HX * transpose(HZ) != 0 over F_2.")
+    end
+
+    if !(sector in (:both, :Z, :X))
+        error("sector must be one of :both, :Z, or :X.")
+    end
+
+    num_qubits = size(HX, 2)
+
+    function in_rowspace_rref(v::Vector{Int64}, R::Matrix{Int64}, pivots::Vector{Int64})
+        w = copy(v)
+        for (row_idx, pivot_col) in enumerate(pivots)
+            if w[pivot_col] == 1
+                @inbounds for j in 1:length(w)
+                    w[j] = xor(w[j], R[row_idx, j])
+                end
+            end
+        end
+        return all(x -> x == 0, w)
+    end
+
+    function toggle_row!(v::Vector{Int64}, row::AbstractVector{<:Integer})
+        @inbounds for j in 1:length(v)
+            v[j] = xor(v[j], row[j])
+        end
+        return nothing
+    end
+
+    function min_nontrivial_logical_weight(
+        H_kernel::AbstractMatrix{<:Integer},
+        H_trivial::AbstractMatrix{<:Integer},
+    )
+        R_kernel, pivots_kernel = gf2_rref(H_kernel)
+        free_cols = Int64[j for j in 1:num_qubits if !(j in pivots_kernel)]
+
+        null_basis = gf2_nullspace(H_kernel)
+        num_basis_vectors = size(null_basis, 1)
+
+        if num_basis_vectors == 0
+            return nothing
+        end
+
+        trivial_coord_rref, trivial_coord_pivots = gf2_rref(H_trivial[:, free_cols])
+
+        best = Ref(isnothing(max_weight) ? (num_qubits + 1) : (max_weight + 1))
+        current_codeword = zeros(Int64, num_qubits)
+        current_coeffs = zeros(Int64, num_basis_vectors)
+
+        function recurse(start_idx::Int, num_left::Int)
+            if num_left == 0
+                if !in_rowspace_rref(current_coeffs, trivial_coord_rref, trivial_coord_pivots)
+                    weight = count(x -> x != 0, current_codeword)
+                    if weight < best[]
+                        best[] = weight
+                    end
+                end
+                return
+            end
+
+            stop_idx = num_basis_vectors - num_left + 1
+            for i in start_idx:stop_idx
+                current_coeffs[i] = 1
+                toggle_row!(current_codeword, view(null_basis, i, :))
+                recurse(i + 1, num_left - 1)
+                toggle_row!(current_codeword, view(null_basis, i, :))
+                current_coeffs[i] = 0
+            end
+        end
+
+        coeff_weight = 1
+        coeff_weight_limit = isnothing(max_weight) ? num_basis_vectors : min(num_basis_vectors, max_weight)
+
+        while coeff_weight <= coeff_weight_limit && coeff_weight < best[]
+            recurse(1, coeff_weight)
+            coeff_weight += 1
+        end
+
+        return best[] == (isnothing(max_weight) ? num_qubits + 1 : max_weight + 1) ? nothing : best[]
+    end
+
+    if sector == :Z
+        return min_nontrivial_logical_weight(HX, HZ)
+    elseif sector == :X
+        return min_nontrivial_logical_weight(HZ, HX)
+    else
+        dZ = min_nontrivial_logical_weight(HX, HZ)
+        dX = min_nontrivial_logical_weight(HZ, HX)
+
+        if isnothing(dX) && isnothing(dZ)
+            return nothing
+        elseif isnothing(dX)
+            return dZ
+        elseif isnothing(dZ)
+            return dX
+        else
+            return min(dX, dZ)
+        end
+    end
+end

@@ -51,4 +51,10 @@ using LinearAlgebra
     @test mod.(HX * transpose(Z_basis), 2) == zeros(Int64, size(HX, 1), size(Z_basis, 1))
     @test mod.(HZ * transpose(X_basis), 2) == zeros(Int64, size(HZ, 1), size(X_basis, 1))
     @test mod.(X_basis * transpose(Z_basis), 2) == Matrix{Int64}(I, 1, 1)
+    @test css_distance(HX, HZ) == 1
+
+    A_terms = [(:x, 1), (:y, 1), (:y, 2)]
+    B_terms = [(:x, 1), (:y, 1), (:y, 2)]
+    HX_bb, HZ_bb = bb_check_matrices(2, 3, A_terms, B_terms)
+    @test css_distance(HX_bb, HZ_bb) == 2
 end

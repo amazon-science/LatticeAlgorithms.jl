@@ -130,3 +130,11 @@ end
 @test_throws ErrorException bb_y_matrix(3, 0)
 @test_throws ErrorException LatticeAlgorithms._bb_matrix(6, 6, [(:x, 1), (:y, 1)])
 @test_throws ErrorException LatticeAlgorithms._bb_matrix(6, 6, [(:x, 1), (:x, 1), (:y, 2)])
+
+HX, HZ = bb_check_matrices(6, 6,
+    [(:x, 3), (:y, 1), (:y, 2)],
+    [(:y, 3), (:x, 1), (:x, 2)]
+)
+
+@test css_distance(HX, HZ; sector=:Z) == 6
+@test css_distance(HX, HZ; sector=:X) == 6

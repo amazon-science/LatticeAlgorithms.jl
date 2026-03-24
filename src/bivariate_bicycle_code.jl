@@ -153,19 +153,31 @@ function bb_num_logicals(
 end
 
 """
-    bb_parameters(l::Int, m::Int, A_terms::Vector{Tuple{Symbol, Int}}, B_terms::Vector{Tuple{Symbol, Int}})
+    bb_parameters(l::Int, m::Int, A_terms::Vector{Tuple{Symbol, Int}}, B_terms::Vector{Tuple{Symbol, Int}}; compute_distance=false)
 
-Return a named tuple with the BB-code parameters `(n, k)`.
+Return a named tuple with the BB-code parameters.
+
+By default this function returns `(n, k)`. If `compute_distance=true`, it
+returns `(n, k, d)`, where `d` is computed by an exact exhaustive search via
+`css_distance(HX, HZ)`.
 """
 function bb_parameters(
     l::Int,
     m::Int,
     A_terms::Vector{Tuple{Symbol, Int}},
-    B_terms::Vector{Tuple{Symbol, Int}}
+    B_terms::Vector{Tuple{Symbol, Int}};
+    compute_distance::Bool=false,
 )
     n = bb_num_data_qubits(l, m)
     k = bb_num_logicals(l, m, A_terms, B_terms)
-    return (n=n, k=k)
+
+    if !compute_distance
+        return (n=n, k=k)
+    end
+
+    HX, HZ = bb_check_matrices(l, m, A_terms, B_terms)
+    d = css_distance(HX, HZ; sector=:Z)
+    return (n=n, k=k, d=d)
 end
 
 """
