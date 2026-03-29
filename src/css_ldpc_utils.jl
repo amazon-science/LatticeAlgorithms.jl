@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 """
     gf2_rref(M::AbstractMatrix{<:Integer})
 
@@ -68,6 +69,23 @@ function gf2_rref(M::AbstractMatrix{<:Integer})
     end
 
     return R, pivots
+end
+
+function gf2_rank(H::AbstractMatrix{<:Integer})
+    _, pivots = gf2_rref(H)
+    return length(pivots)
+end
+
+function gf2_in_rowspace(v::AbstractVector{<:Integer}, R::AbstractMatrix{<:Integer}, pivots::AbstractVector{<:Integer})
+    w = mod.(Int64.(collect(v)), 2)
+    for (row_idx, pivot_col) in enumerate(pivots)
+        if w[pivot_col] == 1
+            @inbounds for j in 1:length(w)
+                w[j] = xor(w[j], R[row_idx, j])
+            end
+        end
+    end
+    return all(x -> x == 0, w)
 end
 
 """

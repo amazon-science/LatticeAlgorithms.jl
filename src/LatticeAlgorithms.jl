@@ -142,6 +142,7 @@ include("tn_utils.jl")
 
 export gf2_rref, gf2_nullspace, gf2_inverse
 export gf2_rref_with_rhs
+export gf2_rank, gf2_in_rowspace
 export css_stabilizers_from_check_matrix, css_generator_from_check_matrix, css_logicals, css_distance
 include("css_ldpc_utils.jl")
 
