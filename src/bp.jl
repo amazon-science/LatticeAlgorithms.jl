@@ -238,8 +238,8 @@ end
 """
     bp_decode(H::AbstractMatrix{<:Integer}, s::AbstractVector{<:Integer}, p;
               max_iter::Int=size(H, 2),
-              check_rule::Symbol=:sum_product,
-              memory_rule::Symbol=:memoryless,
+              check_to_bit_update_rule::Symbol=:sum_product,
+              bit_to_check_update_rule::Symbol=:memoryless,
               γ=nothing,
               initial_marginals=nothing,
               min_sum_scaling::Symbol=:none)
@@ -247,13 +247,13 @@ end
 Decode the binary syndrome equation `H * e = s (mod 2)` with a configurable
 belief-propagation engine.
 
-The two algorithmic axes are
+The implementation exposes two orthogonal update-rule choices.
 
-- `check_rule`:
+- `check_to_bit_update_rule`:
   - `:sum_product` for the exact LLR-domain tanh/atanh check update,
   - `:min_sum` for the min-sum approximation.
-- `memory_rule`:
-  - `:memoryless` for standard BP,
+- `bit_to_check_update_rule`:
+  - `:memoryless` for the standard BP variable-node update,
   - `:mem` for uniform-memory BP,
   - `:dmem` for disordered-memory BP.
 
@@ -329,8 +329,8 @@ function bp_decode(
 
     check_to_bits, bit_to_checks, check_bit_pos, bit_check_pos = tanner_graph(H)
 
-    var_to_check = [fill(llr_prior[j], length(bit_to_checks[j])) for j in 1:num_bits]
-    check_to_var = [zeros(Float64, length(check_to_bits[i])) for i in 1:num_checks]
+    bit_to_check = [fill(llr_prior[j], length(bit_to_checks[j])) for j in 1:num_bits]
+    check_to_bit = [zeros(Float64, length(check_to_bits[i])) for i in 1:num_checks]
 
     
     marginals = copy(marginals_prev)
@@ -362,7 +362,7 @@ function bp_decode(
 
             total = bias[bit_idx]
             for check_idx in neighbors
-                total += check_to_var[check_idx][check_bit_pos[check_idx][bit_idx]]
+                total += check_to_bit[check_idx][check_bit_pos[check_idx][bit_idx]]
             end
             marginals[bit_idx] = total
             hard_error[bit_idx] = total < 0 ? 1 : 0
@@ -372,10 +372,10 @@ function bp_decode(
                 msg = bias[bit_idx]
                 for other_check_idx in neighbors
                     if other_check_idx != check_idx
-                        msg += check_to_var[other_check_idx][check_bit_pos[other_check_idx][bit_idx]]
+                        msg += check_to_bit[other_check_idx][check_bit_pos[other_check_idx][bit_idx]]
                     end
                 end
-                var_to_check[bit_idx][local_idx] = msg
+                bit_to_check[bit_idx][local_idx] = msg
             end
         end
 
