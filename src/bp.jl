@@ -129,109 +129,80 @@ function _bp_gamma_vector(γ, bit_to_check_update_rule::Symbol, num_bits::Int)
 end
 
 """
-    _bp_check_update_sum_product!(check_to_var, var_to_check, check_to_bits,
-                                  bit_check_pos, syndrome)
+    _bp_check_update_sum_product!(outgoing_messages, incoming_messages, syndrome_sign; α=1.0)
 
-Apply the exact tanh/atanh check-node update in the LLR domain.
+Apply the essential LLR-domain sum-product local rule for one check node.
+The caller is responsible for gathering the incoming messages around the check.
+The optional scaling factor `α` multiplies the final outgoing message.
 """
 function _bp_check_update_sum_product!(
-    check_to_var::Vector{Vector{Float64}},
-    var_to_check::Vector{Vector{Float64}},
-    check_to_bits::Vector{Vector{Int64}},
-    bit_check_pos::Vector{Dict{Int64, Int64}},
-    syndrome::Vector{Int64},
+    outgoing_messages::Vector{Float64},
+    incoming_messages::Vector{Float64},
+    syndrome_sign::Float64;
+    α::Real=1.0,
 )
-    num_checks = length(check_to_bits)
+    deg = length(incoming_messages)
+    tanh_half = Vector{Float64}(undef, deg)
 
-    for check_idx in 1:num_checks
-        neighbors = check_to_bits[check_idx]
-        deg = length(neighbors)
-        if deg == 0
-            continue
-        end
-
-        tanh_half = Vector{Float64}(undef, deg)
-        for local_idx in 1:deg
-            bit_idx = neighbors[local_idx]
-            msg = var_to_check[bit_idx][bit_check_pos[bit_idx][check_idx]]
-            tanh_half[local_idx] = tanh(msg / 2)
-        end
-
-        total_prod = prod(tanh_half)
-        syndrome_sign = syndrome[check_idx] == 0 ? 1.0 : -1.0
-
-        for local_idx in 1:deg
-            x = tanh_half[local_idx]
-            prod_excluding_j = iszero(x) ? prod(tanh_half[k] for k in 1:deg if k != local_idx) : total_prod / x
-
-            # Numerical guard against roundoff slightly outside (-1, 1).
-            clipped = clamp(prod_excluding_j, -1 + 1e-15, 1 - 1e-15)
-            check_to_var[check_idx][local_idx] = syndrome_sign * 2 * atanh(clipped)
-        end
+    for local_idx in 1:deg
+        tanh_half[local_idx] = tanh(incoming_messages[local_idx] / 2)
     end
 
-    return nothing
+    total_prod = prod(tanh_half)
+
+    for local_idx in 1:deg
+        x = tanh_half[local_idx]
+        prod_excluding_j = iszero(x) ? prod(tanh_half[k] for k in 1:deg if k != local_idx) : total_prod / x
+
+        # Guard against roundoff slightly outside (-1, 1).
+        clipped = clamp(prod_excluding_j, -1 + 1e-15, 1 - 1e-15)
+        outgoing_messages[local_idx] = Float64(α) * syndrome_sign * 2 * atanh(clipped)
+    end
 end
 
 """
-    _bp_check_update_min_sum!(check_to_var, var_to_check, check_to_bits,
-                              bit_check_pos, syndrome; α=1.0)
+    _bp_check_update_min_sum!(outgoing_messages, incoming_messages, syndrome_sign; α=1.0)
 
-Apply the min-sum check-node update with optional scaling factor `α`.
+Apply the essential min-sum local rule for one check node. The caller is
+responsible for gathering the incoming messages around the check.
 """
 function _bp_check_update_min_sum!(
-    check_to_var::Vector{Vector{Float64}},
-    var_to_check::Vector{Vector{Float64}},
-    check_to_bits::Vector{Vector{Int64}},
-    bit_check_pos::Vector{Dict{Int64, Int64}},
-    syndrome::Vector{Int64};
+    outgoing_messages::Vector{Float64},
+    incoming_messages::Vector{Float64},
+    syndrome_sign::Float64;
     α::Real=1.0,
 )
-    num_checks = length(check_to_bits)
+    deg = length(incoming_messages)
+    signs = Vector{Float64}(undef, deg)
+    absvals = Vector{Float64}(undef, deg)
+    total_sign = 1.0
+    min1 = Inf
+    min2 = Inf
+    min1_idx = 0
 
-    for check_idx in 1:num_checks
-        neighbors = check_to_bits[check_idx]
-        deg = length(neighbors)
-        if deg == 0
-            continue
-        end
+    for local_idx in 1:deg
+        msg = incoming_messages[local_idx]
+        signs[local_idx] = sign(msg)
+        absvals[local_idx] = abs(msg)
+        total_sign *= signs[local_idx]
 
-        signs = Vector{Float64}(undef, deg)
-        absvals = Vector{Float64}(undef, deg)
-        total_sign = 1.0
-        min1 = Inf
-        min2 = Inf
-        min1_idx = 0
-
-        for local_idx in 1:deg
-            bit_idx = neighbors[local_idx]
-            msg = var_to_check[bit_idx][bit_check_pos[bit_idx][check_idx]]
-            signs[local_idx] = sign(msg)
-            absvals[local_idx] = abs(msg)
-            total_sign *= signs[local_idx]
-
-            if absvals[local_idx] < min1
-                min2 = min1
-                min1 = absvals[local_idx]
-                min1_idx = local_idx
-            elseif absvals[local_idx] < min2
-                min2 = absvals[local_idx]
-            end
-        end
-
-        syndrome_sign = syndrome[check_idx] == 0 ? 1.0 : -1.0
-
-        for local_idx in 1:deg
-            excluded_sign = total_sign * signs[local_idx]
-            min_without_j = local_idx == min1_idx ? min2 : min1
-            if isinf(min_without_j)
-                min_without_j = 0.0
-            end
-            check_to_var[check_idx][local_idx] = syndrome_sign * Float64(α) * excluded_sign * min_without_j
+        if absvals[local_idx] < min1
+            min2 = min1
+            min1 = absvals[local_idx]
+            min1_idx = local_idx
+        elseif absvals[local_idx] < min2
+            min2 = absvals[local_idx]
         end
     end
 
-    return nothing
+    for local_idx in 1:deg
+        excluded_sign = total_sign * signs[local_idx]
+        min_without_j = local_idx == min1_idx ? min2 : min1
+        if isinf(min_without_j)
+            min_without_j = 0.0
+        end
+        outgoing_messages[local_idx] = syndrome_sign * Float64(α) * excluded_sign * min_without_j
+    end
 end
 
 
@@ -347,7 +318,7 @@ function bp_decode(
 
     bit_to_check = [fill(llr_prior[j], length(bit_to_checks[j])) for j in 1:num_bits]
     check_to_bit = [zeros(Float64, length(check_to_bits[i])) for i in 1:num_checks]
-    
+
     marginals = copy(marginals_prev)
     hard_error = zeros(Int64, num_bits)
     for iter in 1:max_iter
@@ -356,7 +327,7 @@ function bp_decode(
         else
             bias = (1 .- γ_vec) .* llr_prior .+ γ_vec .* marginals_prev
         end
-        
+
         α = if check_to_bit_update_rule == :min_sum
             min_sum_scaling == :roffe ? 1 - 2.0^(-iter) : 1.0
         else
@@ -385,7 +356,7 @@ function bp_decode(
                 _bp_check_update_sum_product!(check_to_bit[check_idx], incoming_messages, syndrome_sign; α=α)
             else
                 _bp_check_update_min_sum!(check_to_bit[check_idx], incoming_messages, syndrome_sign; α=α)
-        end
+            end
         end
 
         # Apply the bit to check  message passing rule
