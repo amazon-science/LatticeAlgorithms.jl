@@ -13,28 +13,30 @@
 # limitations under the License.
 
 using Random
-using SparseArrays
 
-function _relay_prior_llr_vector(p::Real, num_bits::Int)
-    if !(0 < p < 0.5)
-        error("The bit-flip probability p has to satisfy 0 < p < 0.5.")
-    end
-    return fill(log((1 - p) / p), num_bits)
-end
+"""
+    _relay_sample_gamma_vector(rng::AbstractRNG, num_bits::Int, leg_idx::Int;
+                               gamma_schedule=nothing,
+                               first_leg_gamma::Real=0.35,
+                               gamma_center::Real=0.3655,
+                               gamma_width::Real=1.239)
 
-function _relay_prior_llr_vector(p::AbstractVector{<:Real}, num_bits::Int)
-    if length(p) != num_bits
-        error("The probability vector length has to equal the number of columns of H.")
-    end
-    if any(x -> !(0 < x < 0.5), p)
-        error("All bit-flip probabilities have to satisfy 0 < p_j < 0.5.")
-    end
-    return log.((1 .- p) ./ p)
-end
+Return the length-`num_bits` memory-strength vector used by one relay leg.
 
-_relay_weight(error::AbstractVector{<:Integer}, llr_prior::AbstractVector{<:Real}) =
-    sum(Int64.(error) .* llr_prior)
+If `gamma_schedule` is supplied, it overrides the default sampling rule.
+Supported formats are
 
+- a matrix whose `leg_idx`-th row is the gamma vector for that leg;
+- a vector whose `leg_idx`-th entry is either
+  - a scalar gamma value, or
+  - a length-`num_bits` gamma vector.
+
+If `gamma_schedule` is not supplied, the default rule is
+
+- first leg: a uniform vector with value `first_leg_gamma`;
+- later legs: i.i.d. sampling from
+  `[gamma_center - gamma_width / 2, gamma_center + gamma_width / 2]`.
+"""
 function _relay_sample_gamma_vector(
     rng::AbstractRNG,
     num_bits::Int,
@@ -57,13 +59,23 @@ function _relay_sample_gamma_vector(
             if !(1 <= leg_idx <= length(gamma_schedule))
                 error("gamma_schedule does not contain the requested leg index.")
             end
-            gamma_vec = gamma_schedule[leg_idx]
-            if length(gamma_vec) != num_bits
-                error("Each gamma vector in gamma_schedule has to have length num_bits.")
+
+            γ_leg = gamma_schedule[leg_idx]
+
+            if γ_leg isa Real
+                γf = Float64(γ_leg)
+                isfinite(γf) || error("Scalar entries of gamma_schedule must be finite.")
+                return fill(γf, num_bits)
+            else
+                if length(γ_leg) != num_bits
+                    error("Each gamma vector in gamma_schedule has to have length num_bits.")
+                end
+                γ_vec = Float64.(collect(γ_leg))
+                all(isfinite, γ_vec) || error("All entries of gamma_schedule must be finite.")
+                return γ_vec
             end
-            return Float64.(collect(gamma_vec))
         else
-            error("gamma_schedule has to be a matrix or a vector of vectors.")
+            error("gamma_schedule has to be a matrix or a vector whose entries are scalars or vectors.")
         end
     end
 
@@ -77,28 +89,10 @@ function _relay_sample_gamma_vector(
     return lower .+ (upper - lower) .* rand(rng, num_bits)
 end
 
-function _relay_build_graph(H::SparseMatrixCSC{Int64, Int64})
-    num_checks, num_bits = size(H)
-
-    check_to_bits = [Int64[] for _ in 1:num_checks]
-    bit_to_checks = [Int64[] for _ in 1:num_bits]
-    check_bit_pos = [Dict{Int64, Int64}() for _ in 1:num_checks]
-    bit_check_pos = [Dict{Int64, Int64}() for _ in 1:num_bits]
-
-    rows, cols, _ = findnz(H)
-    for (check_idx, bit_idx) in zip(rows, cols)
-        push!(check_to_bits[check_idx], bit_idx)
-        check_bit_pos[check_idx][bit_idx] = length(check_to_bits[check_idx])
-
-        push!(bit_to_checks[bit_idx], check_idx)
-        bit_check_pos[bit_idx][check_idx] = length(bit_to_checks[bit_idx])
-    end
-
-    return check_to_bits, bit_to_checks, check_bit_pos, bit_check_pos
-end
-
 """
-    relay_bp_decode(H::AbstractMatrix{<:Integer}, s::AbstractVector{<:Integer}, p;
+    relay_bp_decode(H::AbstractMatrix{<:Integer},
+                    s::AbstractVector{<:Integer},
+                    p;
                     num_solutions::Int=1,
                     max_legs::Int=301,
                     leg_max_iter::Int=60,
@@ -107,46 +101,69 @@ end
                     gamma_center::Real=0.3655,
                     gamma_width::Real=1.239,
                     gamma_schedule=nothing,
+                    check_to_bit_update_rule::Symbol=:min_sum,
+                    min_sum_scaling::Symbol=:none,
                     rng::AbstractRNG=Random.default_rng())
 
 Decode the binary syndrome equation `H * e = s (mod 2)` using the Relay-BP
-heuristic introduced by Müller et al. (IBM Quantum).
+heuristic.
 
-Relay-BP chains together multiple DMem-BP legs. The first leg starts from the
-channel log-likelihood ratios. Each subsequent leg is initialized with the
-previous leg's final marginals, and uses a new set of memory strengths.
-Whenever a leg finds a syndrome-matching solution, that solution is recorded.
-The decoder stops once either `max_legs` legs have been executed or
-`num_solutions` distinct solutions have been found, and returns the
-lowest-weight converged solution.
+Each relay leg is a call to
 
-The default memory-strength parameters are the rotated-surface-code XZ-decoding
-settings reported by Müller et al.: first-leg memory strength `0.35`, followed
-by i.i.d. sampling from the interval `[-0.254, 0.985]` on later legs.
+```julia
+bp_decode(...;
+    check_to_bit_update_rule=check_to_bit_update_rule,
+    bit_to_check_update_rule=:dmem,
+    γ=γ_leg,
+    initial_marginals=previous_leg_marginals,
+    min_sum_scaling=min_sum_scaling)
+```
 
-Keyword arguments:
-- `num_solutions`: stop after this many distinct converged solutions are found
-- `max_legs`: maximum number of relay legs
-- `leg_max_iter`: iteration limit for legs `2, 3, ...`
-- `first_leg_max_iter`: iteration limit for the first leg
+So this file only implements the relay scheduler; the underlying BP dynamics are
+delegated to `bp_decode` in `bp.jl`.
+
+The canonical Relay-BP setting is
+- `check_to_bit_update_rule = :min_sum`
+- `min_sum_scaling = :none`
+
+The first leg starts from the channel prior. Each subsequent leg is initialized
+with the previous leg's final marginals and uses a new gamma vector.
+
+Whenever a leg finds a syndrome-consistent solution, that solution is recorded.
+The decoder stops once either
+- `max_legs` legs have been executed, or
+- `num_solutions` distinct converged solutions have been found.
+
+Among converged solutions, the decoder returns the one of minimum weighted cost.
+If no leg converges, it returns the best fallback hard decision, ranked first by
+residual syndrome weight and then by weighted cost.
+
+Keyword arguments
+-----------------
+- `num_solutions`: stop after this many distinct converged solutions are found.
+- `max_legs`: maximum number of relay legs.
+- `leg_max_iter`: iteration limit for legs `2, 3, ...`.
+- `first_leg_max_iter`: iteration limit for the first leg.
 - `first_leg_gamma`: uniform memory strength used on the first leg when
-  `gamma_schedule` is not supplied
+  `gamma_schedule` is not supplied.
 - `gamma_center`, `gamma_width`: define the later-leg sampling interval
-  `[gamma_center - gamma_width / 2, gamma_center + gamma_width / 2]`
-- `gamma_schedule`: optional explicit schedule of gamma vectors; this can be
-  either a matrix whose rows are gamma vectors or a vector of gamma vectors
-- `rng`: random-number generator used for sampling gamma vectors
+  `[gamma_center - gamma_width / 2, gamma_center + gamma_width / 2]`.
+- `gamma_schedule`: optional explicit schedule of gamma values/vectors.
+- `check_to_bit_update_rule`: passed through to `bp_decode`.
+- `min_sum_scaling`: passed through to `bp_decode`.
+- `rng`: random-number generator used for sampling gamma vectors.
 
-The return value is a named tuple with fields
-- `error`: the returned correction (best converged correction if one exists,
-  otherwise the best non-converged hard decision by residual-syndrome weight)
-- `converged`: whether any leg converged
-- `iterations`: the total number of BP iterations across all legs
-- `num_legs_run`: the number of legs executed
-- `solutions_found`: the number of distinct converged solutions found
-- `weight`: the weighted cost of the returned correction
-- `legs`: the per-leg decoder outputs
-- `best_leg`: the index of the leg that produced the returned correction
+Return value
+------------
+A named tuple with fields
+- `error`
+- `converged`
+- `iterations`
+- `num_legs_run`
+- `solutions_found`
+- `weight`
+- `legs`
+- `best_leg`
 """
 function relay_bp_decode(
     H::AbstractMatrix{<:Integer},
@@ -160,6 +177,8 @@ function relay_bp_decode(
     gamma_center::Real=0.3655,
     gamma_width::Real=1.239,
     gamma_schedule=nothing,
+    check_to_bit_update_rule::Symbol=:min_sum,
+    min_sum_scaling::Symbol=:none,
     rng::AbstractRNG=Random.default_rng(),
 )
     H = mod.(Int64.(H), 2)
@@ -179,9 +198,7 @@ function relay_bp_decode(
         error("Iteration limits have to be positive integers.")
     end
 
-    llr_prior = _relay_prior_llr_vector(p, num_bits)
-    initial_marginals = copy(llr_prior)
-
+    initial_marginals = nothing
     legs = NamedTuple[]
     total_iterations = 0
 
@@ -193,7 +210,7 @@ function relay_bp_decode(
     found_solution_keys = Set{BitVector}()
 
     for leg_idx in 1:max_legs
-        gamma_vec = _relay_sample_gamma_vector(
+        γ_vec = _relay_sample_gamma_vector(
             rng,
             num_bits,
             leg_idx;
@@ -205,19 +222,25 @@ function relay_bp_decode(
 
         max_iter = leg_idx == 1 ? first_leg_max_iter : leg_max_iter
 
-        leg = dmem_bp_decode(
+        leg = bp_decode(
             H,
             s,
             p;
             max_iter=max_iter,
+            check_to_bit_update_rule=check_to_bit_update_rule,
+            bit_to_check_update_rule=:dmem,
+            γ=γ_vec,
             initial_marginals=initial_marginals,
-            gamma=gamma_vec,
+            min_sum_scaling=min_sum_scaling,
         )
 
         push!(legs, merge((leg=leg_idx,), leg))
         total_iterations += leg.iterations
+
+        # Relay initialization: the next leg starts from this leg's final marginals.
         initial_marginals = leg.marginals
 
+        # Track the best non-converged fallback by residual syndrome weight, then by cost.
         if isnothing(best_fallback)
             best_fallback = leg
             best_fallback_leg = leg_idx
@@ -231,6 +254,7 @@ function relay_bp_decode(
             end
         end
 
+        # Record distinct converged solutions.
         if leg.converged
             key = BitVector(leg.error .!= 0)
             if !(key in found_solution_keys)
@@ -272,33 +296,47 @@ function relay_bp_decode(
 end
 
 """
-    css_relay_bp_decode(HX::AbstractMatrix{<:Integer}, HZ::AbstractMatrix{<:Integer},
-                        sx::AbstractVector{<:Integer}, sz::AbstractVector{<:Integer}, p;
+    css_relay_bp_decode(HX::AbstractMatrix{<:Integer},
+                        HZ::AbstractMatrix{<:Integer},
+                        sx::AbstractVector{<:Integer},
+                        sz::AbstractVector{<:Integer},
+                        px,
+                        pz=px;
                         kwargs...)
 
-Decode a CSS code under uncorrelated code-capacity `X/Z` noise using two
+Decode a CSS code under independent code-capacity `X/Z` noise using two
 independent calls to `relay_bp_decode`.
 
-The convention is:
-- `sx = HZ * x (mod 2)` is the syndrome induced by `X` errors
-- `sz = HX * z (mod 2)` is the syndrome induced by `Z` errors
+The convention is
+- `sx = HZ * x (mod 2)` for the `X`-error sector,
+- `sz = HX * z (mod 2)` for the `Z`-error sector.
 
 All keyword arguments are passed through to `relay_bp_decode` in each sector.
-The return value is a named tuple with fields
-- `x`: the estimated `X`-component correction
-- `z`: the estimated `Z`-component correction
-- `x_result`: the full decoder output for the `X` sector
-- `z_result`: the full decoder output for the `Z` sector
+
+Return value
+------------
+A named tuple with fields
+- `x`
+- `z`
+- `x_result`
+- `z_result`
 """
 function css_relay_bp_decode(
     HX::AbstractMatrix{<:Integer},
     HZ::AbstractMatrix{<:Integer},
     sx::AbstractVector{<:Integer},
     sz::AbstractVector{<:Integer},
-    p;
-    kwargs...
+    px,
+    pz=px;
+    kwargs...,
 )
-    x_result = relay_bp_decode(HZ, sx, p; kwargs...)
-    z_result = relay_bp_decode(HX, sz, p; kwargs...)
-    return (x=x_result.error, z=z_result.error, x_result=x_result, z_result=z_result)
+    x_result = relay_bp_decode(HZ, sx, px; kwargs...)
+    z_result = relay_bp_decode(HX, sz, pz; kwargs...)
+
+    return (
+        x=x_result.error,
+        z=z_result.error,
+        x_result=x_result,
+        z_result=z_result,
+    )
 end
