@@ -319,6 +319,7 @@ function bp_decode(
     bit_to_check = [fill(marginals_prev[j], length(bit_to_checks[j])) for j in 1:num_bits]
     check_to_bit = [zeros(Float64, length(check_to_bits[i])) for i in 1:num_checks]
 
+    bias = copy(llr_prior)
     marginals = copy(marginals_prev)
     hard_error = zeros(Int64, num_bits)
     for iter in 1:max_iter
