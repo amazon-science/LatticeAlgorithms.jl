@@ -226,8 +226,6 @@ function osd_decode(
     for pos in best_remainder_positions
         candidate[remainder[pos]] = 1
     end
-    return candidate
-end    
 
     if mod.(H * candidate, 2) != s
         error("Internal error: the OSD candidate does not satisfy the syndrome equation.")
