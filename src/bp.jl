@@ -108,13 +108,17 @@ function _bp_gamma_vector(γ, bit_to_check_update_rule::Symbol, num_bits::Int)
         if isnothing(γ)
             error("For bit_to_check_update_rule=:mem, γ must be supplied as a scalar.")
         elseif γ isa Real
-            return fill(Float64(γ), num_bits)
+            γf = Float64(γ)
+            if !(0.0 <= γf <= 1.0)
+                error("For bit_to_check_update_rule=:mem, γ must be a scalar in [0, 1].")
+            end
+            return fill(γf, num_bits)
         else
             error("For bit_to_check_update_rule=:mem, γ must be a scalar.")
         end
     else # :dmem
         if isnothing(γ)
-            error("For bit_to_check_update_rule=:dmem, γ must be supplied as a vector.")
+            error("For bit_to_check_update_rule=:dmem, γ must be supplied as a scalar or a vector.")
         elseif γ isa Real
             return fill(Float64(γ), num_bits)
         else
@@ -182,7 +186,7 @@ function _bp_check_update_min_sum!(
 
     for local_idx in 1:deg
         msg = incoming_messages[local_idx]
-        signs[local_idx] = sign(msg)
+        signs[local_idx] = msg < 0 ? -1.0 : 1.0
         absvals[local_idx] = abs(msg)
         total_sign *= signs[local_idx]
 
@@ -238,7 +242,7 @@ This means the common named decoders correspond to the following keyword pairs.
   `bit_to_check_update_rule=:memoryless`.
 - Mem-BP:
   canonically `check_to_bit_update_rule=:sum_product`,
-  `bit_to_check_update_rule=:mem`, with scalar `γ`.
+  `bit_to_check_update_rule=:mem`, with scalar `γ` between 0 and 1.
 - DMem-BP:
   canonically `check_to_bit_update_rule=:sum_product` or `:min_sum`,
   `bit_to_check_update_rule=:dmem`, with node-dependent `γ`.
@@ -316,13 +320,13 @@ function bp_decode(
 
     check_to_bits, bit_to_checks, check_bit_pos, bit_check_pos = tanner_graph(H)
 
-    bit_to_check = [fill(llr_prior[j], length(bit_to_checks[j])) for j in 1:num_bits]
+    bit_to_check = [fill(marginals_prev[j], length(bit_to_checks[j])) for j in 1:num_bits]
     check_to_bit = [zeros(Float64, length(check_to_bits[i])) for i in 1:num_checks]
 
     marginals = copy(marginals_prev)
     hard_error = zeros(Int64, num_bits)
     for iter in 1:max_iter
-        if memory_rule == :memoryless
+        if bit_to_check_update_rule == :memoryless
             bias = copy(llr_prior)
         else
             bias = (1 .- γ_vec) .* llr_prior .+ γ_vec .* marginals_prev
@@ -403,7 +407,7 @@ function bp_decode(
                 bias=copy(bias),
                 iterations=iter,
                 syndrome_weight=0,
-                weight=_bp_weight(hard_error, llr_prior),
+                weight=sum(Int64.(hard_error) .* llr_prior),
                 check_to_bit_update_rule=check_to_bit_update_rule,
                 bit_to_check_update_rule=bit_to_check_update_rule,
                 gamma=copy(γ_vec),
@@ -422,7 +426,7 @@ function bp_decode(
         bias=copy(bias),
         iterations=max_iter,
         syndrome_weight=count(x -> x != 0, syndrome_residual),
-        weight=_bp_weight(hard_error, llr_prior),
+        weight=sum(Int64.(hard_error) .* llr_prior),
         check_to_bit_update_rule=check_to_bit_update_rule,
         bit_to_check_update_rule=bit_to_check_update_rule,
         gamma=copy(γ_vec),
