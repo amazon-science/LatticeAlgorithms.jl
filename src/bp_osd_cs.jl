@@ -19,8 +19,7 @@
 
 Construct the linear-algebra data used by OSD from the BP soft output.
 
-The columns are ordered from least reliable to most reliable using increasing
-`abs.(soft_llr)`. The returned named tuple contains
+The columns are ordered from least reliable to most reliable using increasing `soft_llr`. The returned named tuple contains
 
 - `rank`
 - `basis`
@@ -52,8 +51,8 @@ function _bp_osd_setup(
     H_reduced = rank_H == 0 ? zeros(Int64, 0, num_bits) : R[1:rank_H, :]
     s_reduced = rank_H == 0 ? Int64[] : s_reduced[1:rank_H]
 
-    # Reliability ordering: small |LLR| = less reliable.
-    order = sortperm(abs.(soft_llr); rev=false)
+    # Reliability ordering: small LLR = less reliable.
+    order = sortperm((soft_llr); rev=false)
 
     if rank_H == 0
         basis = Int64[]
