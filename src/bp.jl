@@ -53,60 +53,75 @@ _bp_weight(error::AbstractVector{<:Integer}, llr_prior::AbstractVector{<:Real}) 
 
 
 """
-    _bp_validate_rules(check_rule::Symbol, memory_rule::Symbol)
+    _bp_validate_update_rules(check_to_bit_update_rule::Symbol,
+                              bit_to_check_update_rule::Symbol)
 
-Validate the two BP rule selectors.
+Validate the two BP update-rule selectors.
 """
-function _bp_validate_rules(check_rule::Symbol, memory_rule::Symbol)
-    if check_rule ∉ (:sum_product, :min_sum)
-        error("Unsupported check_rule=$(check_rule). Supported values are :sum_product and :min_sum.")
+function _bp_validate_update_rules(
+    check_to_bit_update_rule::Symbol,
+    bit_to_check_update_rule::Symbol,
+)
+    if check_to_bit_update_rule ∉ (:sum_product, :min_sum)
+        error(
+            "Unsupported check_to_bit_update_rule=$(check_to_bit_update_rule). " *
+            "Supported values are :sum_product and :min_sum.",
+        )
     end
-    if memory_rule ∉ (:memoryless, :mem, :dmem)
-        error("Unsupported memory_rule=$(memory_rule). Supported values are :memoryless, :mem, and :dmem.")
+    if bit_to_check_update_rule ∉ (:memoryless, :mem, :dmem)
+        error(
+            "Unsupported bit_to_check_update_rule=$(bit_to_check_update_rule). " *
+            "Supported values are :memoryless, :mem, and :dmem.",
+        )
     end
     return nothing
 end
 
 """
-    _bp_gamma_vector(γ, memory_rule::Symbol, num_bits::Int)
+    _bp_gamma_vector(γ, bit_to_check_update_rule::Symbol, num_bits::Int)
 
 Normalize the memory parameter to a length-`num_bits` vector.
 """
-function _bp_gamma_vector(γ, memory_rule::Symbol, num_bits::Int)
-    if memory_rule == :memoryless
+function _bp_gamma_vector(γ, bit_to_check_update_rule::Symbol, num_bits::Int)
+    if bit_to_check_update_rule == :memoryless
         if isnothing(γ)
             return zeros(Float64, num_bits)
         elseif γ isa Real
             if γ != 0
-                error("For memory_rule=:memoryless, γ must be omitted or set to 0.")
+                error("For bit_to_check_update_rule=:memoryless, γ must be omitted or set to 0.")
             end
             return zeros(Float64, num_bits)
         else
             if length(γ) != num_bits
-                error("For memory_rule=:memoryless, a vector γ must have length num_bits and contain only zeros.")
+                error(
+                    "For bit_to_check_update_rule=:memoryless, a vector γ must have length num_bits " *
+                    "and contain only zeros.",
+                )
             end
             γ_vec = Float64.(collect(γ))
             if any(x -> !iszero(x), γ_vec)
-                error("For memory_rule=:memoryless, γ must be identically zero.")
+                error("For bit_to_check_update_rule=:memoryless, γ must be identically zero.")
             end
             return γ_vec
         end
-    elseif memory_rule == :mem
+    elseif bit_to_check_update_rule == :mem
         if isnothing(γ)
-            error("For memory_rule=:mem, γ must be supplied as a scalar.")
+            error("For bit_to_check_update_rule=:mem, γ must be supplied as a scalar.")
         elseif γ isa Real
             return fill(Float64(γ), num_bits)
         else
-            error("For memory_rule=:mem, γ must be a scalar.")
+            error("For bit_to_check_update_rule=:mem, γ must be a scalar.")
         end
     else # :dmem
         if isnothing(γ)
-            error("For memory_rule=:dmem, γ must be supplied as a vector.")
+            error("For bit_to_check_update_rule=:dmem, γ must be supplied as a vector.")
         elseif γ isa Real
             return fill(Float64(γ), num_bits)
         else
             if length(γ) != num_bits
-                error("For memory_rule=:dmem, γ must be a scalar or a vector of length num_bits.")
+                error(
+                    "For bit_to_check_update_rule=:dmem, γ must be a scalar or a vector of length num_bits.",
+                )
             end
             return Float64.(collect(γ))
         end
