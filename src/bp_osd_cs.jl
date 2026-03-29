@@ -12,19 +12,48 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+    _bp_osd_setup(H::AbstractMatrix{<:Integer},
+                  s::AbstractVector{<:Integer},
+                  soft_llr::AbstractVector{<:Real})
+
+Construct the linear-algebra data used by OSD from the BP soft output.
+
+The columns are ordered from least reliable to most reliable using increasing
+`abs.(soft_llr)`. The returned named tuple contains
+
+- `rank`
+- `basis`
+- `remainder`
+- `base_basis_solution`
+- `delta_basis`
+- `order`
+"""
 function _bp_osd_setup(
     H::AbstractMatrix{<:Integer},
     s::AbstractVector{<:Integer},
     soft_llr::AbstractVector{<:Real},
 )
+    H = mod.(Int64.(H), 2)
+    s = mod.(Int64.(s), 2)
+    soft_llr = Float64.(collect(soft_llr))
+
+    num_checks, num_bits = size(H)
+    if length(s) != num_checks
+        error("The syndrome length has to equal the number of rows of H.")
+    end
+    if length(soft_llr) != num_bits
+        error("The soft-decision vector length has to equal the number of columns of H.")
+    end
+
     R, s_reduced, row_pivots = gf2_rref_with_rhs(H, s)
     rank_H = length(row_pivots)
-    num_bits = size(H, 2)
 
     H_reduced = rank_H == 0 ? zeros(Int64, 0, num_bits) : R[1:rank_H, :]
     s_reduced = rank_H == 0 ? Int64[] : s_reduced[1:rank_H]
 
-    order = sortperm(collect(soft_llr); rev=false)
+    # Reliability ordering: small |LLR| = less reliable.
+    order = sortperm(abs.(soft_llr); rev=false)
 
     if rank_H == 0
         basis = Int64[]
@@ -43,7 +72,8 @@ function _bp_osd_setup(
         H_basis = H_reduced[:, basis]
         H_basis_inv = gf2_inverse(H_basis)
         base_basis_solution = mod.(H_basis_inv * s_reduced, 2)
-        delta_basis = isempty(remainder) ? zeros(Int64, rank_H, 0) : mod.(H_basis_inv * H_reduced[:, remainder], 2)
+        delta_basis = isempty(remainder) ? zeros(Int64, rank_H, 0) :
+            mod.(H_basis_inv * H_reduced[:, remainder], 2)
     end
 
     return (
@@ -56,23 +86,11 @@ function _bp_osd_setup(
     )
 end
 
-function _assemble_osd_candidate(
-    num_bits::Int,
-    basis::Vector{Int64},
-    remainder::Vector{Int64},
-    basis_bits::AbstractVector{<:Integer},
-    remainder_positions::AbstractVector{<:Integer},
-)
-    candidate = zeros(Int64, num_bits)
-    for (i, bit_idx) in enumerate(basis)
-        candidate[bit_idx] = basis_bits[i]
-    end
-    for pos in remainder_positions
-        candidate[remainder[pos]] = 1
-    end
-    return candidate
-end
+"""
+    _for_each_combination(n::Int, k::Int, f::Function)
 
+Call `f` on every `k`-subset of `1:n`, represented as a vector of positions.
+"""
 function _for_each_combination(n::Int, k::Int, f::Function)
     if k < 0 || k > n
         return nothing
@@ -102,26 +120,32 @@ function _for_each_combination(n::Int, k::Int, f::Function)
 end
 
 """
-    osd_decode(H::AbstractMatrix{<:Integer}, s::AbstractVector{<:Integer},
-               soft_llr::AbstractVector{<:Real}; osd_order::Int=0, λ::Int=60)
+    osd_decode(H::AbstractMatrix{<:Integer},
+               s::AbstractVector{<:Integer},
+               soft_llr::AbstractVector{<:Real};
+               osd_order::Int=0,
+               λ::Int=60)
 
-Return the OSD post-processing solution for the binary syndrome equation
-`H * e = s (mod 2)` using the BP soft-decision vector `soft_llr`.
+Run ordered-statistics decoding (OSD) using the supplied BP soft output.
 
-This function implements:
+This function implements
 - OSD-0 when `osd_order = 0`,
 - combination-sweep OSD up to generic order `osd_order` when `osd_order > 0`.
 
-The search rule is:
+The search rule is
 - order 0: the standard OSD-0 candidate;
 - order 1: all singleton flips on the full OSD remainder set;
 - orders `2, ..., osd_order`: all combinations on the first `λ` remainder bits.
 
-The return value is a named tuple with fields
-- `error`: the final OSD candidate,
-- `basis`: the OSD basis set,
-- `remainder`: the ordered remainder set,
-- `weight`: the Hamming weight of the returned candidate.
+Return value
+------------
+A named tuple with fields
+- `error`
+- `basis`
+- `remainder`
+- `remainder_positions`
+- `hamming_weight`
+- `reliability_order`
 """
 function osd_decode(
     H::AbstractMatrix{<:Integer},
@@ -155,22 +179,26 @@ function osd_decode(
 
     best_basis_bits = copy(setup.base_basis_solution)
     best_remainder_positions = Int64[]
-    best_weight = count(x -> x != 0, setup.base_basis_solution)
+    best_hamming_weight = count(!iszero, setup.base_basis_solution)
 
     function consider_positions(positions::Vector{Int64})
         candidate_basis_bits = copy(setup.base_basis_solution)
+
         for pos in positions
             if rank_H > 0
                 candidate_basis_bits = mod.(candidate_basis_bits .+ setup.delta_basis[:, pos], 2)
             end
         end
 
-        candidate_weight = count(x -> x != 0, candidate_basis_bits) + length(positions)
-        if candidate_weight < best_weight
+        candidate_hamming_weight =
+            count(!iszero, candidate_basis_bits) + length(positions)
+
+        if candidate_hamming_weight < best_hamming_weight
             best_basis_bits = candidate_basis_bits
             best_remainder_positions = copy(positions)
-            best_weight = candidate_weight
+            best_hamming_weight = candidate_hamming_weight
         end
+
         return nothing
     end
 
@@ -189,65 +217,87 @@ function osd_decode(
         end
     end
 
-    candidate = _assemble_osd_candidate(num_bits, basis, remainder, best_basis_bits, best_remainder_positions)
+    # Assemble the full-length OSD candidate from its basis coordinates and the chosen
+    # positions in the remainder set
+    candidate = zeros(Int64, num_bits)
+    for (i, bit_idx) in enumerate(basis)
+        candidate[bit_idx] = best_basis_bits[i]
+    end
+    for pos in best_remainder_positions
+        candidate[remainder[pos]] = 1
+    end
+    return candidate
+end    
 
     if mod.(H * candidate, 2) != s
         error("Internal error: the OSD candidate does not satisfy the syndrome equation.")
     end
 
-    return (error=candidate, basis=basis, remainder=remainder, weight=best_weight)
+    return (
+        error=candidate,
+        basis=basis,
+        remainder=remainder,
+        remainder_positions=best_remainder_positions,
+        hamming_weight=best_hamming_weight,
+        reliability_order=setup.order,
+    )
 end
 
 """
-    bp_osd_cs_decode(H::AbstractMatrix{<:Integer}, s::AbstractVector{<:Integer}, p::Real;
+    bp_osd_cs_decode(H::AbstractMatrix{<:Integer},
+                     s::AbstractVector{<:Integer},
+                     p;
                      max_iter::Int=size(H, 2),
                      λ::Int=60,
                      osd_order::Int=0,
-                     bp_method::Symbol=:ms)
+                     check_to_bit_update_rule::Symbol=:min_sum,
+                     bit_to_check_update_rule::Symbol=:memoryless,
+                     γ=nothing,
+                     initial_marginals=nothing,
+                     min_sum_scaling::Symbol=:roffe)
 
-Decode the binary syndrome equation `H * e = s (mod 2)` using the BP+OSD
-framework of Roffe, White, Burton, and Campbell.
+Decode the binary syndrome equation `H * e = s (mod 2)` using BP followed by
+OSD post-processing if BP alone does not converge.
 
-The decoder first runs a BP stage, then:
-- if BP converges to a syndrome-matching solution, that solution is returned;
-- otherwise, OSD post-processing is applied.
+This function is a thin BP+OSD wrapper around `bp_decode` and `osd_decode`.
+Its BP keywords intentionally mirror those of `bp_decode`. The default BP
+settings match the min-sum / memoryless / Roffe-style scaling path traditionally
+used in BP+OSD.
 
-The OSD stage supports:
-- `osd_order = 0`: OSD-0
-- `osd_order > 0`: combination-sweep OSD up to order `osd_order`
+The decoder proceeds as follows:
+1. run `bp_decode`;
+2. if BP returns a syndrome-consistent hard decision, return it immediately;
+3. otherwise, run `osd_decode` on the final BP `llr`.
 
-The BP stage is customizable through `bp_method`:
-- `:ms`: scaled min-sum BP (default; this matches the BP variant used by Roffe et al.)
-
-Keyword arguments:
-- `max_iter`: maximum number of BP iterations
-- `λ`: size cutoff used by the combination-sweep search for orders `≥ 2`
-- `osd_order`: OSD order
-- `bp_method`: BP variant to use
-
-The return value is a named tuple with fields
-- `error`: the final correction
+Return value
+------------
+A named tuple with fields
+- `error`: final returned correction
 - `converged`: whether BP alone converged
-- `bp_error`: the BP hard decision
-- `llr`: the final BP soft-decision / reliability vector used by OSD
-- `basis`: the OSD basis set
-- `remainder`: the ordered OSD remainder set
-- `weight`: the Hamming weight of the returned correction
-- `bp_method`: the BP method used
+- `bp_result`: full result returned by `bp_decode`
+- `osd_result`: full result returned by `osd_decode`, or `nothing`
+- `llr`: BP soft output used by OSD
+- `basis`
+- `remainder`
+- `hamming_weight`
 """
 function bp_osd_cs_decode(
     H::AbstractMatrix{<:Integer},
     s::AbstractVector{<:Integer},
-    p::Real;
+    p;
     max_iter::Int=size(H, 2),
     λ::Int=60,
     osd_order::Int=0,
-    bp_method::Symbol=:ms,
+    check_to_bit_update_rule::Symbol=:min_sum,
+    bit_to_check_update_rule::Symbol=:memoryless,
+    γ=nothing,
+    initial_marginals=nothing,
+    min_sum_scaling::Symbol=:roffe,
 )
     H = mod.(Int64.(H), 2)
     s = mod.(Int64.(s), 2)
 
-    num_checks, num_bits = size(H)
+    num_checks, _ = size(H)
     if length(s) != num_checks
         error("The syndrome length has to equal the number of rows of H.")
     end
@@ -258,23 +308,28 @@ function bp_osd_cs_decode(
         error("λ has to be nonnegative.")
     end
 
-    bp =
-        if bp_method == :ms
-            bp_min_sum_decode(H, s, p; max_iter=max_iter)
-        else
-            error("Unsupported bp_method. Check docstring.")
-        end
+    bp = bp_decode(
+        H,
+        s,
+        p;
+        max_iter=max_iter,
+        check_to_bit_update_rule=check_to_bit_update_rule,
+        bit_to_check_update_rule=bit_to_check_update_rule,
+        γ=γ,
+        initial_marginals=initial_marginals,
+        min_sum_scaling=min_sum_scaling,
+    )
 
     if bp.converged
         return (
             error=bp.error,
             converged=true,
-            bp_error=bp.error,
+            bp_result=bp,
+            osd_result=nothing,
             llr=bp.llr,
             basis=Int64[],
             remainder=Int64[],
-            weight=count(x -> x != 0, bp.error),
-            bp_method=bp_method,
+            hamming_weight=count(!iszero, bp.error),
         )
     end
 
@@ -283,73 +338,95 @@ function bp_osd_cs_decode(
     return (
         error=osd.error,
         converged=false,
-        bp_error=bp.error,
+        bp_result=bp,
+        osd_result=osd,
         llr=bp.llr,
         basis=osd.basis,
         remainder=osd.remainder,
-        weight=osd.weight,
-        bp_method=bp_method,
+        hamming_weight=osd.hamming_weight,
     )
 end
 
 """
-    css_bp_osd_cs_decode(HX::AbstractMatrix{<:Integer}, HZ::AbstractMatrix{<:Integer},
-                         sx::AbstractVector{<:Integer}, sz::AbstractVector{<:Integer}, p::Real;
+    css_bp_osd_cs_decode(HX::AbstractMatrix{<:Integer},
+                         HZ::AbstractMatrix{<:Integer},
+                         sx::AbstractVector{<:Integer},
+                         sz::AbstractVector{<:Integer},
+                         px,
+                         pz=px;
                          max_iter::Int=max(size(HX, 2), size(HZ, 2)),
                          λ::Int=60,
                          osd_order::Int=0,
-                         bp_method::Symbol=:ms)
+                         check_to_bit_update_rule::Symbol=:min_sum,
+                         bit_to_check_update_rule::Symbol=:memoryless,
+                         γx=nothing,
+                         γz=nothing,
+                         initial_marginals_x=nothing,
+                         initial_marginals_z=nothing,
+                         min_sum_scaling::Symbol=:roffe)
 
-Decode a CSS code under uncorrelated code-capacity `X/Z` noise using two
+Decode a CSS code under independent code-capacity `X/Z` noise using two
 independent calls to `bp_osd_cs_decode`.
 
 The convention is:
-- `sx = HZ * x (mod 2)` is the syndrome induced by `X` errors
-- `sz = HX * z (mod 2)` is the syndrome induced by `Z` errors
+- `sx = HZ * x (mod 2)` is the syndrome induced by `X` errors,
+- `sz = HX * z (mod 2)` is the syndrome induced by `Z` errors.
 
-The BP stage is customizable through `bp_method`, see docstring of `bp_osd_cs_decode`
+`px` and `pz` can each be either a scalar bit-flip probability or a vector of
+per-bit probabilities, matching the interface of `bp_decode`.
 
-The OSD stage supports:
-- `osd_order = 0`: OSD-0
-- `osd_order > 0`: combination-sweep OSD up to order `osd_order`
-
-Keyword arguments:
-- `max_iter`: maximum number of BP iterations used in each sector
-- `λ`: size cutoff used by the combination-sweep search for orders `≥ 2`
-- `osd_order`: OSD order used in each sector
-- `bp_method`: BP variant used in each sector
-
-The return value is a named tuple with fields
-- `x`: the estimated `X`-component correction
-- `z`: the estimated `Z`-component correction
-- `x_result`: the full decoder output for the `X` sector
-- `z_result`: the full decoder output for the `Z` sector
+Return value
+------------
+A named tuple with fields
+- `x`
+- `z`
+- `x_result`
+- `z_result`
 """
 function css_bp_osd_cs_decode(
     HX::AbstractMatrix{<:Integer},
     HZ::AbstractMatrix{<:Integer},
     sx::AbstractVector{<:Integer},
     sz::AbstractVector{<:Integer},
-    p::Real;
+    px,
+    pz=px;
     max_iter::Int=max(size(HX, 2), size(HZ, 2)),
     λ::Int=60,
     osd_order::Int=0,
-    bp_method::Symbol=:ms,
+    check_to_bit_update_rule::Symbol=:min_sum,
+    bit_to_check_update_rule::Symbol=:memoryless,
+    γx=nothing,
+    γz=nothing,
+    initial_marginals_x=nothing,
+    initial_marginals_z=nothing,
+    min_sum_scaling::Symbol=:roffe,
 )
     x_result = bp_osd_cs_decode(
-        HZ, sx, p;
+        HZ,
+        sx,
+        px;
         max_iter=max_iter,
         λ=λ,
         osd_order=osd_order,
-        bp_method=bp_method,
+        check_to_bit_update_rule=check_to_bit_update_rule,
+        bit_to_check_update_rule=bit_to_check_update_rule,
+        γ=γx,
+        initial_marginals=initial_marginals_x,
+        min_sum_scaling=min_sum_scaling,
     )
 
     z_result = bp_osd_cs_decode(
-        HX, sz, p;
+        HX,
+        sz,
+        pz;
         max_iter=max_iter,
         λ=λ,
         osd_order=osd_order,
-        bp_method=bp_method,
+        check_to_bit_update_rule=check_to_bit_update_rule,
+        bit_to_check_update_rule=bit_to_check_update_rule,
+        γ=γz,
+        initial_marginals=initial_marginals_z,
+        min_sum_scaling=min_sum_scaling,
     )
 
     return (
