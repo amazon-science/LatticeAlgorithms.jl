@@ -154,7 +154,7 @@ export bb_X_logicals, bb_Z_logicals
 export bb_Mq, bb_Mp, bb_M
 include("bivariate_bicycle_code.jl")
 
-export bp_osd_cs_decode, bp_min_sum_decode
+export bp_osd_cs_decode, bp_min_sum_decode, css_bp_osd_cs_decode
 include("bp_osd_cs.jl")
 
 export dmem_bp_decode, relay_bp_decode, css_relay_bp_decode
