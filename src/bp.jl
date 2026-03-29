@@ -20,7 +20,7 @@ using SparseArrays
 Return the channel log-likelihood-ratio vector
 
 ```math
-\Lambda_j^{(0)} = \log\!\left(\frac{1-p_j}{p_j}\right)
+Lambda_j^{(0)} = log(frac{1-p_j}{p_j})
 ```
 
 for a binary symmetric channel. The argument `p` can be either a scalar bit-flip
