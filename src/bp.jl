@@ -283,8 +283,8 @@ A named tuple with fields
 - `iterations`
 - `syndrome_weight`
 - `weight`
-- `check_rule`
-- `memory_rule`
+- `check_to_bit_update_rule`
+- `bit_to_check_update_rule`
 - `gamma`
 """
 function bp_decode(
@@ -292,13 +292,13 @@ function bp_decode(
     s::AbstractVector{<:Integer},
     p;
     max_iter::Int=size(H, 2),
-    check_rule::Symbol=:sum_product,
-    memory_rule::Symbol=:memoryless,
+    check_to_bit_update_rule::Symbol=:sum_product,
+    bit_to_check_update_rule::Symbol=:memoryless,
     γ=nothing,
     initial_marginals=nothing,
     min_sum_scaling::Symbol=:none,
 )
-    _bp_validate_rules(check_rule, memory_rule)
+    _bp_validate_update_rules(check_to_bit_update_rule, bit_to_check_update_rule)
 
     if min_sum_scaling ∉ (:none, :roffe)
         error("Unsupported min_sum_scaling=$(min_sum_scaling). Supported values are :none and :roffe.")
@@ -316,7 +316,7 @@ function bp_decode(
     end
 
     llr_prior = Float64.(_bp_prior_llr_vector(p, num_bits))
-    γ_vec = _bp_gamma_vector(γ, memory_rule, num_bits)
+    γ_vec = _bp_gamma_vector(γ, bit_to_check_update_rule, num_bits)
 
     marginals_prev = if isnothing(initial_marginals)
         copy(llr_prior)
@@ -390,8 +390,8 @@ function bp_decode(
                 iterations=iter,
                 syndrome_weight=0,
                 weight=_bp_weight(hard_error, llr_prior),
-                check_rule=check_rule,
-                memory_rule=memory_rule,
+                check_to_bit_update_rule=check_to_bit_update_rule,
+                bit_to_check_update_rule=bit_to_check_update_rule,
                 gamma=copy(γ_vec),
             )
         end
@@ -409,85 +409,8 @@ function bp_decode(
         iterations=max_iter,
         syndrome_weight=count(x -> x != 0, syndrome_residual),
         weight=_bp_weight(hard_error, llr_prior),
-        check_rule=check_rule,
-        memory_rule=memory_rule,
+        check_to_bit_update_rule=check_to_bit_update_rule,
+        bit_to_check_update_rule=bit_to_check_update_rule,
         gamma=copy(γ_vec),
     )
 end
-
-# """
-#     standard_bp_decode(H, s, p; kwargs...)
-
-# Standard memoryless BP with the exact sum-product check update.
-# """
-# function standard_bp_decode(H::AbstractMatrix{<:Integer}, s::AbstractVector{<:Integer}, p; kwargs...)
-#     return bp_decode(H, s, p; check_rule=:sum_product, memory_rule=:memoryless, kwargs...)
-# end
-
-# """
-#     minsum_bp_decode(H, s, p; min_sum_scaling::Symbol=:roffe, kwargs...)
-
-# Memoryless min-sum BP. By default this uses the same scaling schedule as the
-# current `bp_min_sum_decode` implementation.
-# """
-# function minsum_bp_decode(
-#     H::AbstractMatrix{<:Integer},
-#     s::AbstractVector{<:Integer},
-#     p;
-#     min_sum_scaling::Symbol=:roffe,
-#     kwargs...,
-# )
-#     return bp_decode(
-#         H,
-#         s,
-#         p;
-#         check_rule=:min_sum,
-#         memory_rule=:memoryless,
-#         min_sum_scaling=min_sum_scaling,
-#         kwargs...,
-#     )
-# end
-
-# """
-#     mem_bp_decode(H, s, p; γ, check_rule::Symbol=:sum_product, kwargs...)
-
-# Uniform-memory BP. Set `check_rule=:min_sum` to combine Mem-BP with a min-sum
-# check update.
-# """
-# function mem_bp_decode(
-#     H::AbstractMatrix{<:Integer},
-#     s::AbstractVector{<:Integer},
-#     p;
-#     γ,
-#     check_rule::Symbol=:sum_product,
-#     kwargs...,
-# )
-#     return bp_decode(H, s, p; check_rule=check_rule, memory_rule=:mem, γ=γ, kwargs...)
-# end
-
-# """
-#     dmem_bp_decode(H, s, p; γ, check_rule::Symbol=:min_sum, kwargs...)
-
-# Disordered-memory BP. By default the check update is `:min_sum`, matching the
-# current Relay-BP implementation.
-# """
-# function dmem_bp_decode(
-#     H::AbstractMatrix{<:Integer},
-#     s::AbstractVector{<:Integer},
-#     p;
-#     γ,
-#     check_rule::Symbol=:min_sum,
-#     kwargs...,
-# )
-#     return bp_decode(H, s, p; check_rule=check_rule, memory_rule=:dmem, γ=γ, kwargs...)
-# end
-
-# """
-#     bp_min_sum_decode(H, s, p; kwargs...)
-
-# Backward-compatible wrapper for the current BP+OSD entry point. This is exactly
-# memoryless min-sum BP with the Roffe scaling schedule.
-# """
-# function bp_min_sum_decode(H::AbstractMatrix{<:Integer}, s::AbstractVector{<:Integer}, p; kwargs...)
-#     return minsum_bp_decode(H, s, p; min_sum_scaling=:roffe, kwargs...)
-# end
