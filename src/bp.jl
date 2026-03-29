@@ -123,88 +123,200 @@ function _bp_gamma_vector(γ, bit_to_check_update_rule::Symbol, num_bits::Int)
     end
 end
 
-"""
-    _bp_check_update_sum_product!(outgoing_messages, incoming_messages, syndrome_sign; α=1.0)
-
-Apply the essential LLR-domain sum-product local rule for one check node.
-The caller is responsible for gathering the incoming messages around the check.
-The optional scaling factor `α` multiplies the final outgoing message.
-"""
-function _bp_check_update_sum_product!(
-    outgoing_messages::Vector{Float64},
-    incoming_messages::Vector{Float64},
-    syndrome_sign::Float64;
-    α::Real=1.0,
-)
-    deg = length(incoming_messages)
-    tanh_half = Vector{Float64}(undef, deg)
-
-    for local_idx in 1:deg
-        tanh_half[local_idx] = tanh(incoming_messages[local_idx] / 2)
+function _bp_prepare_initial_marginals(initial_marginals, llr_prior::Vector{Float64}, num_bits::Int)
+    if isnothing(initial_marginals)
+        return copy(llr_prior)
     end
-
-    total_prod = prod(tanh_half)
-
-    for local_idx in 1:deg
-        x = tanh_half[local_idx]
-        prod_excluding_j = iszero(x) ? prod(tanh_half[k] for k in 1:deg if k != local_idx) : total_prod / x
-
-        # Guard against roundoff slightly outside (-1, 1).
-        clipped = clamp(prod_excluding_j, -1 + 1e-15, 1 - 1e-15)
-        outgoing_messages[local_idx] = Float64(α) * syndrome_sign * 2 * atanh(clipped)
+    if length(initial_marginals) != num_bits
+        error("initial_marginals has to have length equal to the number of columns of H.")
     end
+    return Float64.(collect(initial_marginals))
 end
 
-"""
-    _bp_check_update_min_sum!(outgoing_messages, incoming_messages, syndrome_sign; α=1.0)
+function _bp_precompute_message_positions(
+    check_to_bits::Vector{Vector{Int64}},
+    bit_to_checks::Vector{Vector{Int64}},
+    check_bit_pos,
+    bit_check_pos,
+)
+    check_neighbor_pos_in_bit = Vector{Vector{Int64}}(undef, length(check_to_bits))
+    for check_idx in eachindex(check_to_bits)
+        neighbors = check_to_bits[check_idx]
+        positions = Vector{Int64}(undef, length(neighbors))
+        @inbounds for local_idx in 1:length(neighbors)
+            bit_idx = neighbors[local_idx]
+            positions[local_idx] = bit_check_pos[bit_idx][check_idx]
+        end
+        check_neighbor_pos_in_bit[check_idx] = positions
+    end
 
-Apply the essential min-sum local rule for one check node. The caller is
-responsible for gathering the incoming messages around the check.
-"""
-function _bp_check_update_min_sum!(
+    bit_neighbor_pos_in_check = Vector{Vector{Int64}}(undef, length(bit_to_checks))
+    for bit_idx in eachindex(bit_to_checks)
+        neighbors = bit_to_checks[bit_idx]
+        positions = Vector{Int64}(undef, length(neighbors))
+        @inbounds for local_idx in 1:length(neighbors)
+            check_idx = neighbors[local_idx]
+            positions[local_idx] = check_bit_pos[check_idx][bit_idx]
+        end
+        bit_neighbor_pos_in_check[bit_idx] = positions
+    end
+
+    return check_neighbor_pos_in_bit, bit_neighbor_pos_in_check
+end
+
+function _bp_fill_bias!(
+    bias::Vector{Float64},
+    llr_prior::Vector{Float64},
+    γ_vec::Vector{Float64},
+    marginals_prev::Vector{Float64},
+    bit_to_check_update_rule::Symbol,
+)
+    if bit_to_check_update_rule == :memoryless
+        return nothing
+    end
+
+    @inbounds for j in eachindex(bias)
+        bias[j] = (1 - γ_vec[j]) * llr_prior[j] + γ_vec[j] * marginals_prev[j]
+    end
+    return nothing
+end
+
+function _bp_weight(hard_error::Vector{Int64}, llr_prior::Vector{Float64})
+    total = 0.0
+    @inbounds for j in eachindex(hard_error)
+        total += hard_error[j] * llr_prior[j]
+    end
+    return total
+end
+
+function _bp_syndrome_weight(
+    check_to_bits::Vector{Vector{Int64}},
+    hard_error::Vector{Int64},
+    s::AbstractVector{<:Integer},
+)
+    residual_weight = 0
+    @inbounds for check_idx in eachindex(check_to_bits)
+        parity = s[check_idx]
+        for bit_idx in check_to_bits[check_idx]
+            parity = xor(parity, hard_error[bit_idx])
+        end
+        residual_weight += parity
+    end
+    return residual_weight
+end
+
+function _bp_check_update_sum_product_from_graph!(
     outgoing_messages::Vector{Float64},
-    incoming_messages::Vector{Float64},
-    syndrome_sign::Float64;
+    neighbors::Vector{Int64},
+    neighbor_positions_in_bit_msgs::Vector{Int64},
+    bit_to_check,
+    syndrome_sign::Float64,
+    tanh_half_workspace::Vector{Float64};
     α::Real=1.0,
 )
-    deg = length(incoming_messages)
+    deg = length(neighbors)
+    if deg == 0
+        return nothing
+    end
 
-    # Degree-1 check: the check fixes the bit directly, so send a saturated LLR.
     if deg == 1
         sat = 2 * atanh(1 - 1e-15)
         outgoing_messages[1] = Float64(α) * syndrome_sign * sat
         return nothing
     end
 
-    signs = Vector{Float64}(undef, deg)
-    absvals = Vector{Float64}(undef, deg)
+    zero_count = 0
+    zero_idx = 0
+    product_nonzero = 1.0
+
+    @inbounds for local_idx in 1:deg
+        bit_idx = neighbors[local_idx]
+        msg = bit_to_check[bit_idx][neighbor_positions_in_bit_msgs[local_idx]]
+        th = tanh(msg / 2)
+        tanh_half_workspace[local_idx] = th
+        if iszero(th)
+            zero_count += 1
+            zero_idx = local_idx
+        else
+            product_nonzero *= th
+        end
+    end
+
+    scale = Float64(α) * syndrome_sign * 2.0
+
+    if zero_count > 1
+        @inbounds for local_idx in 1:deg
+            outgoing_messages[local_idx] = 0.0
+        end
+    elseif zero_count == 1
+        @inbounds for local_idx in 1:deg
+            prod_excluding_j = local_idx == zero_idx ? product_nonzero : 0.0
+            clipped = clamp(prod_excluding_j, -1 + 1e-15, 1 - 1e-15)
+            outgoing_messages[local_idx] = scale * atanh(clipped)
+        end
+    else
+        @inbounds for local_idx in 1:deg
+            prod_excluding_j = product_nonzero / tanh_half_workspace[local_idx]
+            clipped = clamp(prod_excluding_j, -1 + 1e-15, 1 - 1e-15)
+            outgoing_messages[local_idx] = scale * atanh(clipped)
+        end
+    end
+
+    return nothing
+end
+
+function _bp_check_update_min_sum_from_graph!(
+    outgoing_messages::Vector{Float64},
+    neighbors::Vector{Int64},
+    neighbor_positions_in_bit_msgs::Vector{Int64},
+    bit_to_check,
+    syndrome_sign::Float64;
+    α::Real=1.0,
+)
+    deg = length(neighbors)
+    if deg == 0
+        return nothing
+    end
+
+    if deg == 1
+        sat = 2 * atanh(1 - 1e-15)
+        outgoing_messages[1] = Float64(α) * syndrome_sign * sat
+        return nothing
+    end
+
     total_sign = 1.0
     min1 = Inf
     min2 = Inf
     min1_idx = 0
 
-    for local_idx in 1:deg
-        msg = incoming_messages[local_idx]
-        signs[local_idx] = msg < 0 ? -1.0 : 1.0
-        absvals[local_idx] = abs(msg)
-        total_sign *= signs[local_idx]
+    @inbounds for local_idx in 1:deg
+        bit_idx = neighbors[local_idx]
+        msg = bit_to_check[bit_idx][neighbor_positions_in_bit_msgs[local_idx]]
+        sign = msg < 0 ? -1.0 : 1.0
+        absmsg = abs(msg)
+        total_sign *= sign
 
-        if absvals[local_idx] < min1
+        if absmsg < min1
             min2 = min1
-            min1 = absvals[local_idx]
+            min1 = absmsg
             min1_idx = local_idx
-        elseif absvals[local_idx] < min2
-            min2 = absvals[local_idx]
+        elseif absmsg < min2
+            min2 = absmsg
         end
     end
 
-    for local_idx in 1:deg
-        excluded_sign = total_sign * signs[local_idx]
+    scale = syndrome_sign * Float64(α)
+    @inbounds for local_idx in 1:deg
+        bit_idx = neighbors[local_idx]
+        msg = bit_to_check[bit_idx][neighbor_positions_in_bit_msgs[local_idx]]
+        sign = msg < 0 ? -1.0 : 1.0
+        excluded_sign = total_sign * sign
         min_without_j = local_idx == min1_idx ? min2 : min1
-        outgoing_messages[local_idx] = syndrome_sign * Float64(α) * excluded_sign * min_without_j
+        outgoing_messages[local_idx] = scale * excluded_sign * min_without_j
     end
-end
 
+    return nothing
+end
 
 """
     bp_decode(H::AbstractMatrix{<:Integer}, s::AbstractVector{<:Integer}, p;
@@ -304,29 +416,35 @@ function bp_decode(
 
     llr_prior = Float64.(_bp_prior_llr_vector(p, num_bits))
     γ_vec = _bp_gamma_vector(γ, bit_to_check_update_rule, num_bits)
-
-    marginals_prev = if isnothing(initial_marginals)
-        copy(llr_prior)
-    else
-        if length(initial_marginals) != num_bits
-            error("initial_marginals has to have length equal to the number of columns of H.")
-        end
-        Float64.(collect(initial_marginals))
-    end
+    initial_beliefs = _bp_prepare_initial_marginals(initial_marginals, llr_prior, num_bits)
 
     check_to_bits, bit_to_checks, check_bit_pos, bit_check_pos = tanner_graph(H)
+    check_neighbor_pos_in_bit, bit_neighbor_pos_in_check = _bp_precompute_message_positions(
+        check_to_bits,
+        bit_to_checks,
+        check_bit_pos,
+        bit_check_pos,
+    )
 
-    bit_to_check = [fill(marginals_prev[j], length(bit_to_checks[j])) for j in 1:num_bits]
-    check_to_bit = [zeros(Float64, length(check_to_bits[i])) for i in 1:num_checks]
+    bit_to_check = Vector{Vector{Float64}}(undef, num_bits)
+    @inbounds for bit_idx in 1:num_bits
+        bit_to_check[bit_idx] = fill(initial_beliefs[bit_idx], length(bit_to_checks[bit_idx]))
+    end
+    check_to_bit = [zeros(Float64, length(check_to_bits[check_idx])) for check_idx in 1:num_checks]
 
     bias = copy(llr_prior)
-    marginals = copy(marginals_prev)
+    marginals_prev = copy(initial_beliefs)
+    marginals = similar(initial_beliefs)
     hard_error = zeros(Int64, num_bits)
+
+    is_memoryless = bit_to_check_update_rule == :memoryless
+    use_sum_product = check_to_bit_update_rule == :sum_product
+    max_check_degree = num_checks == 0 ? 0 : maximum(length(check_to_bits[check_idx]) for check_idx in 1:num_checks)
+    tanh_half_workspace = use_sum_product ? zeros(Float64, max_check_degree) : Float64[]
+
     for iter in 1:max_iter
-        if bit_to_check_update_rule == :memoryless
-            bias = copy(llr_prior)
-        else
-            bias = (1 .- γ_vec) .* llr_prior .+ γ_vec .* marginals_prev
+        if !is_memoryless
+            _bp_fill_bias!(bias, llr_prior, γ_vec, marginals_prev, bit_to_check_update_rule)
         end
 
         α = if check_to_bit_update_rule == :min_sum
@@ -335,67 +453,55 @@ function bp_decode(
             1.0
         end
 
-        # Apply the check to bit message passing rule
-        for check_idx in 1:num_checks
-            neighbors = check_to_bits[check_idx]
-            deg = length(neighbors)
-            if deg == 0
-                continue
+        if use_sum_product
+            @inbounds for check_idx in 1:num_checks
+                syndrome_sign = s[check_idx] == 0 ? 1.0 : -1.0
+                _bp_check_update_sum_product_from_graph!(
+                    check_to_bit[check_idx],
+                    check_to_bits[check_idx],
+                    check_neighbor_pos_in_bit[check_idx],
+                    bit_to_check,
+                    syndrome_sign,
+                    tanh_half_workspace;
+                    α=α,
+                )
             end
-
-            # Gather all incoming bit-to-check messages attached to this check.
-            incoming_messages = Vector{Float64}(undef, deg)
-            for local_idx in 1:deg
-                bit_idx = neighbors[local_idx]
-                incoming_messages[local_idx] = bit_to_check[bit_idx][bit_check_pos[bit_idx][check_idx]]
-            end
-
-            syndrome_sign = s[check_idx] == 0 ? 1.0 : -1.0
-
-            # Apply the selected local check rule to produce all outgoing check-to-bit messages.
-            if check_to_bit_update_rule == :sum_product
-                _bp_check_update_sum_product!(check_to_bit[check_idx], incoming_messages, syndrome_sign; α=α)
-            else
-                _bp_check_update_min_sum!(check_to_bit[check_idx], incoming_messages, syndrome_sign; α=α)
+        else
+            @inbounds for check_idx in 1:num_checks
+                syndrome_sign = s[check_idx] == 0 ? 1.0 : -1.0
+                _bp_check_update_min_sum_from_graph!(
+                    check_to_bit[check_idx],
+                    check_to_bits[check_idx],
+                    check_neighbor_pos_in_bit[check_idx],
+                    bit_to_check,
+                    syndrome_sign;
+                    α=α,
+                )
             end
         end
 
-        # Apply the bit to check  message passing rule
-        for bit_idx in 1:num_bits
+        @inbounds for bit_idx in 1:num_bits
             neighbors = bit_to_checks[bit_idx]
+            incoming_positions = bit_neighbor_pos_in_check[bit_idx]
             deg = length(neighbors)
 
-            if deg == 0
-                marginals[bit_idx] = bias[bit_idx]
-                hard_error[bit_idx] = bias[bit_idx] < 0 ? 1 : 0
-                continue
+            total = bias[bit_idx]
+            for local_idx in 1:deg
+                check_idx = neighbors[local_idx]
+                total += check_to_bit[check_idx][incoming_positions[local_idx]]
             end
 
-            # Combine the channel/memory bias with all incoming check-to-bit messages
-            # to form the current marginal and hard decision on this bit.
-            total = bias[bit_idx]
-            for check_idx in neighbors
-                total += check_to_bit[check_idx][check_bit_pos[check_idx][bit_idx]]
-            end
             marginals[bit_idx] = total
             hard_error[bit_idx] = total < 0 ? 1 : 0
 
-            # For each neighboring check, send the extrinsic bit-to-check message,
-            # namely the bias plus all incoming check messages except the recipient one.
             for local_idx in 1:deg
                 check_idx = neighbors[local_idx]
-                msg = bias[bit_idx]
-                for other_check_idx in neighbors
-                    if other_check_idx != check_idx
-                        msg += check_to_bit[other_check_idx][check_bit_pos[other_check_idx][bit_idx]]
-                    end
-                end
-                bit_to_check[bit_idx][local_idx] = msg
+                bit_to_check[bit_idx][local_idx] = total - check_to_bit[check_idx][incoming_positions[local_idx]]
             end
         end
 
-        syndrome_residual = mod.(H * hard_error .+ s, 2)
-        if all(iszero, syndrome_residual)
+        syndrome_weight = _bp_syndrome_weight(check_to_bits, hard_error, s)
+        if syndrome_weight == 0
             return (
                 converged=true,
                 error=copy(hard_error),
@@ -404,26 +510,29 @@ function bp_decode(
                 bias=copy(bias),
                 iterations=iter,
                 syndrome_weight=0,
-                weight=sum(Int64.(hard_error) .* llr_prior),
+                weight=_bp_weight(hard_error, llr_prior),
                 check_to_bit_update_rule=check_to_bit_update_rule,
                 bit_to_check_update_rule=bit_to_check_update_rule,
                 gamma=copy(γ_vec),
             )
         end
 
-        marginals_prev = copy(marginals)
+        if !is_memoryless
+            marginals_prev, marginals = marginals, marginals_prev
+        end
     end
 
-    syndrome_residual = mod.(H * hard_error .+ s, 2)
+    final_marginals = is_memoryless ? marginals : marginals_prev
+    syndrome_weight = _bp_syndrome_weight(check_to_bits, hard_error, s)
     return (
         converged=false,
         error=copy(hard_error),
-        marginals=copy(marginals),
-        llr=copy(marginals),
+        marginals=copy(final_marginals),
+        llr=copy(final_marginals),
         bias=copy(bias),
         iterations=max_iter,
-        syndrome_weight=count(x -> x != 0, syndrome_residual),
-        weight=sum(Int64.(hard_error) .* llr_prior),
+        syndrome_weight=syndrome_weight,
+        weight=_bp_weight(hard_error, llr_prior),
         check_to_bit_update_rule=check_to_bit_update_rule,
         bit_to_check_update_rule=bit_to_check_update_rule,
         gamma=copy(γ_vec),
