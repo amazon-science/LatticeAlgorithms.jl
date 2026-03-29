@@ -467,3 +467,35 @@ function css_distance(
         end
     end
 end
+
+
+"""
+    tanner_graph(H::SparseMatrixCSC{Int64, Int64})
+
+Construct Tanner-graph adjacency lists and local-position lookup tables.
+Returns
+
+- `check_to_bits[i]`: bits incident on check `i`
+- `bit_to_checks[j]`: checks incident on bit `j`
+- `check_bit_pos[i][j]`: local position of bit `j` inside `check_to_bits[i]`
+- `bit_check_pos[j][i]`: local position of check `i` inside `bit_to_checks[j]`
+"""
+function tanner_graph(H::SparseMatrixCSC{Int64, Int64})
+    num_checks, num_bits = size(H)
+
+    check_to_bits = [Int64[] for _ in 1:num_checks]
+    bit_to_checks = [Int64[] for _ in 1:num_bits]
+    check_bit_pos = [Dict{Int64, Int64}() for _ in 1:num_checks]
+    bit_check_pos = [Dict{Int64, Int64}() for _ in 1:num_bits]
+
+    rows, cols, _ = findnz(H)
+    for (check_idx, bit_idx) in zip(rows, cols)
+        push!(check_to_bits[check_idx], bit_idx)
+        check_bit_pos[check_idx][bit_idx] = length(check_to_bits[check_idx])
+
+        push!(bit_to_checks[bit_idx], check_idx)
+        bit_check_pos[bit_idx][check_idx] = length(bit_to_checks[bit_idx])
+    end
+
+    return check_to_bits, bit_to_checks, check_bit_pos, bit_check_pos
+end
