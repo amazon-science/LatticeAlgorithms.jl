@@ -44,15 +44,6 @@ function _bp_prior_llr_vector(p::AbstractVector{<:Real}, num_bits::Int)
 end
 
 """
-    _bp_weight(error, llr_prior)
-
-Return the weighted cost `sum(error_j * llr_prior_j)`.
-"""
-_bp_weight(error::AbstractVector{<:Integer}, llr_prior::AbstractVector{<:Real}) =
-    sum(Int64.(error) .* llr_prior)
-
-
-"""
     _bp_validate_update_rules(check_to_bit_update_rule::Symbol,
                               bit_to_check_update_rule::Symbol)
 
@@ -177,6 +168,14 @@ function _bp_check_update_min_sum!(
     α::Real=1.0,
 )
     deg = length(incoming_messages)
+
+    # Degree-1 check: the check fixes the bit directly, so send a saturated LLR.
+    if deg == 1
+        sat = 2 * atanh(1 - 1e-15)
+        outgoing_messages[1] = Float64(α) * syndrome_sign * sat
+        return nothing
+    end
+
     signs = Vector{Float64}(undef, deg)
     absvals = Vector{Float64}(undef, deg)
     total_sign = 1.0
@@ -202,9 +201,6 @@ function _bp_check_update_min_sum!(
     for local_idx in 1:deg
         excluded_sign = total_sign * signs[local_idx]
         min_without_j = local_idx == min1_idx ? min2 : min1
-        if isinf(min_without_j)
-            min_without_j = 0.0
-        end
         outgoing_messages[local_idx] = syndrome_sign * Float64(α) * excluded_sign * min_without_j
     end
 end
