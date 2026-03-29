@@ -257,6 +257,22 @@ The implementation exposes two orthogonal update-rule choices.
   - `:mem` for uniform-memory BP,
   - `:dmem` for disordered-memory BP.
 
+This means the common named decoders correspond to the following keyword pairs.
+
+- Standard BP (sum-product / memoryless BP):
+  `check_to_bit_update_rule=:sum_product`,
+  `bit_to_check_update_rule=:memoryless`.
+- Min-sum BP:
+  `check_to_bit_update_rule=:min_sum`,
+  `bit_to_check_update_rule=:memoryless`.
+- Mem-BP:
+  canonically `check_to_bit_update_rule=:sum_product`,
+  `bit_to_check_update_rule=:mem`, with scalar `γ`.
+- DMem-BP:
+  canonically `check_to_bit_update_rule=:sum_product` or `:min_sum`,
+  `bit_to_check_update_rule=:dmem`, with node-dependent `γ`.
+  In Relay-BP applications, one often combines `:dmem` with `:min_sum`.
+
 The channel parameter `p` can be either a scalar bit-flip probability or a
 vector of per-bit probabilities.
 
@@ -270,7 +286,7 @@ Keyword arguments
 - `min_sum_scaling`:
   - `:none` for unscaled min-sum,
   - `:roffe` for the schedule `α_t = 1 - 2^(-t)` used in the current
-    `bp_min_sum_decode` implementation.
+    min-sum BP implementation.
 
 Return value
 ------------
@@ -331,11 +347,9 @@ function bp_decode(
 
     bit_to_check = [fill(llr_prior[j], length(bit_to_checks[j])) for j in 1:num_bits]
     check_to_bit = [zeros(Float64, length(check_to_bits[i])) for i in 1:num_checks]
-
     
     marginals = copy(marginals_prev)
     hard_error = zeros(Int64, num_bits)
-
     for iter in 1:max_iter
         if memory_rule == :memoryless
             bias = copy(llr_prior)
@@ -343,13 +357,38 @@ function bp_decode(
             bias = (1 .- γ_vec) .* llr_prior .+ γ_vec .* marginals_prev
         end
         
-        if check_rule == :sum_product
-            _bp_check_update_sum_product!(check_to_var, var_to_check, check_to_bits, bit_check_pos, s)
+        α = if check_to_bit_update_rule == :min_sum
+            min_sum_scaling == :roffe ? 1 - 2.0^(-iter) : 1.0
         else
-            α = min_sum_scaling == :roffe ? 1 - 2.0^(-iter) : 1.0
-            _bp_check_update_min_sum!(check_to_var, var_to_check, check_to_bits, bit_check_pos, s; α=α)
+            1.0
         end
 
+        # Apply the check to bit message passing rule
+        for check_idx in 1:num_checks
+            neighbors = check_to_bits[check_idx]
+            deg = length(neighbors)
+            if deg == 0
+                continue
+            end
+
+            # Gather all incoming bit-to-check messages attached to this check.
+            incoming_messages = Vector{Float64}(undef, deg)
+            for local_idx in 1:deg
+                bit_idx = neighbors[local_idx]
+                incoming_messages[local_idx] = bit_to_check[bit_idx][bit_check_pos[bit_idx][check_idx]]
+            end
+
+            syndrome_sign = s[check_idx] == 0 ? 1.0 : -1.0
+
+            # Apply the selected local check rule to produce all outgoing check-to-bit messages.
+            if check_to_bit_update_rule == :sum_product
+                _bp_check_update_sum_product!(check_to_bit[check_idx], incoming_messages, syndrome_sign; α=α)
+            else
+                _bp_check_update_min_sum!(check_to_bit[check_idx], incoming_messages, syndrome_sign; α=α)
+        end
+        end
+
+        # Apply the bit to check  message passing rule
         for bit_idx in 1:num_bits
             neighbors = bit_to_checks[bit_idx]
             deg = length(neighbors)
@@ -360,6 +399,8 @@ function bp_decode(
                 continue
             end
 
+            # Combine the channel/memory bias with all incoming check-to-bit messages
+            # to form the current marginal and hard decision on this bit.
             total = bias[bit_idx]
             for check_idx in neighbors
                 total += check_to_bit[check_idx][check_bit_pos[check_idx][bit_idx]]
@@ -367,6 +408,8 @@ function bp_decode(
             marginals[bit_idx] = total
             hard_error[bit_idx] = total < 0 ? 1 : 0
 
+            # For each neighboring check, send the extrinsic bit-to-check message,
+            # namely the bias plus all incoming check messages except the recipient one.
             for local_idx in 1:deg
                 check_idx = neighbors[local_idx]
                 msg = bias[bit_idx]
