@@ -162,7 +162,7 @@ include("bp.jl")
 export bp_osd_cs_decode, css_bp_osd_cs_decode
 include("bp_osd_cs.jl")
 
-export dmem_bp_decode, relay_bp_decode, css_relay_bp_decode
+export relay_bp_decode, css_relay_bp_decode
 include("bp_relay.jl")
 
 end # module
