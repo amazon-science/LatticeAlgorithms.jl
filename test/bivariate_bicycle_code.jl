@@ -113,10 +113,7 @@ for (l, m, A_terms, B_terms, n_expected, k_expected) in examples
     test_bb_code_basic_properties(l, m, A_terms, B_terms, n_expected, k_expected)
 end
 
-# Basic sanity checks for shift matrices and exponent reduction
-@test bb_cyclic_shift_matrix(3) == [0 1 0; 0 0 1; 1 0 0]
-@test bb_cyclic_shift_matrix(4) == [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 0 0 0]
-
+# Basic sanity checks for exponent reduction
 let l = 6, m = 6
     x = bb_x_matrix(l, m)
     y = bb_y_matrix(l, m)
@@ -125,7 +122,6 @@ let l = 6, m = 6
 end
 
 # Input validation
-@test_throws ErrorException bb_cyclic_shift_matrix(0)
 @test_throws ErrorException bb_x_matrix(0, 3)
 @test_throws ErrorException bb_y_matrix(3, 0)
 @test_throws ErrorException LatticeAlgorithms._bb_matrix(6, 6, [(:x, 1), (:y, 1)])

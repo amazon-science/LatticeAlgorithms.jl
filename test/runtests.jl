@@ -88,3 +88,7 @@ end
 @testset "bivariate_bicycle_code" begin
     include("bivariate_bicycle_code.jl")
 end
+
+@testset "hyper_graph_product_codes" begin
+    include("hyper_graph_product_codes.jl")
+end

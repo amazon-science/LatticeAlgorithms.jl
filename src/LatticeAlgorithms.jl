@@ -146,15 +146,25 @@ export gf2_rank, gf2_in_rowspace
 export css_stabilizers_from_check_matrix, css_generator_from_check_matrix
 export css_logicals, css_distance
 export tanner_graph
+export cyclic_shift_matrix, circulant_binary_matrix
 include("css_ldpc_utils.jl")
 
-export bb_cyclic_shift_matrix, bb_x_matrix, bb_y_matrix
+export bb_x_matrix, bb_y_matrix
 export bb_A_matrix, bb_B_matrix, bb_matrices, bb_check_matrices
 export bb_num_data_qubits, bb_num_logicals, bb_parameters
 export bb_X_stabilizers, bb_Z_stabilizers, bb_stabilizers
 export bb_X_logicals, bb_Z_logicals
 export bb_Mq, bb_Mp, bb_M
 include("bivariate_bicycle_code.jl")
+
+
+export hgp_full_rank_repetition_check_matrix, hgp_ring_repetition_check_matrix
+export hgp_check_matrices, hgp_num_data_qubits, hgp_num_logicals, hgp_parameters
+export hgp_X_stabilizers, hgp_Z_stabilizers, hgp_stabilizers
+export hgp_X_logicals, hgp_Z_logicals, hgp_Mq, hgp_Mp, hgp_M
+export panteleev_kalachev_c2_parent_check_matrix
+include("hyper_graph_product_codes.jl")
+
 
 export bp_decode
 include("bp.jl")

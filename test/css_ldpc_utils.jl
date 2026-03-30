@@ -191,5 +191,81 @@ using SparseArrays
                 @test !haskey(bit_check_pos[j], i)
             end
         end
-    end    
+    end
+    
+
+    # Basic sanity checks for shift matrices
+    @test cyclic_shift_matrix(3) == [0 1 0; 0 0 1; 1 0 0]
+    @test cyclic_shift_matrix(4) == [0 1 0 0; 0 0 1 0; 0 0 0 1; 1 0 0 0]
+
+    @test_throws ErrorException cyclic_shift_matrix(0)
+end
+
+@testset "circulant_binary_matrix" begin
+    @testset "basic example from polynomial support" begin
+        # h(x) = 1 + x^2 + x^5 over length 7
+        M = circulant_binary_matrix(7, [0, 2, 5])
+
+        @test size(M) == (7, 7)
+
+        # First row convention.
+        @test M[1, :] == [1, 0, 1, 0, 0, 1, 0]
+
+        # Each row is a cyclic shift of the first row.
+        for r in 0:6
+            @test M[r + 1, :] == circshift(M[1, :], r)
+        end
+
+        # Since support has size 3, every row/column has weight 3.
+        @test all(sum(M, dims=1) .== 3)
+        @test all(sum(M, dims=2) .== 3)
+    end
+
+    @testset "agrees with polynomial in cyclic shift matrix" begin
+        n = 9
+        support = [0, 1, 4, 7]
+
+        S = cyclic_shift_matrix(n)
+        expected = zeros(Int64, n, n)
+        for j in support
+            if j == 0
+                expected .+= Matrix{Int64}(I, n, n)
+            else
+                expected .+= S^j
+            end
+        end
+        expected = mod.(expected, 2)
+
+        M = circulant_binary_matrix(n, support)
+        @test M == expected
+    end
+
+    @testset "support is reduced modulo n" begin
+        n = 11
+        @test circulant_binary_matrix(n, [0, 2, 5]) ==
+              circulant_binary_matrix(n, [11, 13, 16])
+
+        @test circulant_binary_matrix(n, [1, 3, 7]) ==
+              circulant_binary_matrix(n, [-10, -8, -4])
+    end
+
+    @testset "duplicate support modulo n is rejected" begin
+        @test_throws Exception circulant_binary_matrix(7, [0, 7, 2])
+        @test_throws Exception circulant_binary_matrix(7, [1, 8])
+        @test_throws Exception circulant_binary_matrix(7, [3, -4])
+    end
+
+    @testset "invalid inputs" begin
+        @test_throws Exception circulant_binary_matrix(0, [0])
+        @test_throws Exception circulant_binary_matrix(-3, [0])
+        @test_throws Exception circulant_binary_matrix(5, Int[])
+    end
+
+    @testset "identity and single-shift special cases" begin
+        n = 8
+
+        @test circulant_binary_matrix(n, [0]) == Matrix{Int64}(I, n, n)
+        @test circulant_binary_matrix(n, [1]) == cyclic_shift_matrix(n)
+        @test circulant_binary_matrix(n, [2]) == cyclic_shift_matrix(n)^2
+    end
 end

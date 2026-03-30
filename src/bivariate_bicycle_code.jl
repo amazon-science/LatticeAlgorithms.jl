@@ -12,23 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-    bb_cyclic_shift_matrix(n::Int)
-
-Return the cyclic shift matrix `S_n` of size `n × n` over `F_2`.
-"""
-function bb_cyclic_shift_matrix(n::Int)
-    if n < 1
-        error("The matrix size n has to be a positive integer.")
-    end
-
-    S = zeros(Int64, n, n)
-    for i in 1:n
-        S[i, mod1(i + 1, n)] = 1
-    end
-
-    return S
-end
 
 """
     bb_x_matrix(l::Int, m::Int)
@@ -40,7 +23,7 @@ function bb_x_matrix(l::Int, m::Int)
     if l < 1 || m < 1
         error("Both l and m have to be positive integers.")
     end
-    return kron(bb_cyclic_shift_matrix(l), Matrix{Int64}(I, m, m))
+    return kron(cyclic_shift_matrix(l), Matrix{Int64}(I, m, m))
 end
 
 """
@@ -53,7 +36,7 @@ function bb_y_matrix(l::Int, m::Int)
     if l < 1 || m < 1
         error("Both l and m have to be positive integers.")
     end
-    return kron(Matrix{Int64}(I, l, l), bb_cyclic_shift_matrix(m))
+    return kron(Matrix{Int64}(I, l, l), cyclic_shift_matrix(m))
 end
 
 function _bb_matrix(l::Int, m::Int, terms::Vector{Tuple{Symbol, Int}})

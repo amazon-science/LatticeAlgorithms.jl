@@ -499,3 +499,52 @@ function tanner_graph(H::SparseMatrixCSC{Int64, Int64})
 
     return check_to_bits, bit_to_checks, check_bit_pos, bit_check_pos
 end
+
+"""
+    cyclic_shift_matrix(n::Int)
+
+Return the cyclic shift matrix `S_n` of size `n × n` over `F_2`.
+"""
+function cyclic_shift_matrix(n::Int)
+    if n < 1
+        error("The matrix size n has to be a positive integer.")
+    end
+
+    S = zeros(Int64, n, n)
+    for i in 1:n
+        S[i, mod1(i + 1, n)] = 1
+    end
+    return S
+end
+
+"""
+    circulant_binary_matrix(n::Int, support::AbstractVector{<:Integer})
+
+Return the `n × n` binary circulant matrix
+`sum(S_n^j for j in support) mod 2`,
+where `S_n` is the cyclic shift matrix.
+"""
+function circulant_binary_matrix(n::Int, support::AbstractVector{<:Integer})
+    if n < 1
+        error("The matrix size n has to be a positive integer.")
+    end
+    if isempty(support)
+        error("The support cannot be empty.")
+    end
+
+    support_mod = Int64.(mod.(collect(support), n))
+    if length(unique(support_mod)) != length(support_mod)
+        error("The support entries must be distinct modulo n.")
+    end
+
+    S = cyclic_shift_matrix(n)
+    M = zeros(Int64, n, n)
+    for j in support_mod
+        if j == 0
+            M .+= Matrix{Int64}(I, n, n)
+        else
+            M .+= S^j
+        end
+    end
+    return mod.(M, 2)
+end
