@@ -86,11 +86,11 @@ function _bp_osd_setup(
 end
 
 """
-    _for_each_combination(n::Int, k::Int, f::Function)
+    _for_each_combination(f::Function, n::Int, k::Int)
 
 Call `f` on every `k`-subset of `1:n`, represented as a vector of positions.
 """
-function _for_each_combination(n::Int, k::Int, f::Function)
+function _for_each_combination(f::Function, n::Int, k::Int)
     if k < 0 || k > n
         return nothing
     end
