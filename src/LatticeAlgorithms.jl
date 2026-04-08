@@ -14,7 +14,6 @@
 
 module LatticeAlgorithms
 
-using LatticeAlgorithms
 using BlockDiagonals
 using LinearAlgebra
 using DataStructures
@@ -55,7 +54,6 @@ export get_grid_points_2D_lattice, basis_transformation, canonical_form_of_anti_
 export get_stabilizer_group_from_generators
 export get_indicators_from_stabilizers
 
-include("utilities.jl")
 export Ω_matrix, gram_matrix_of_GKP_lattice_generator, canonize_GKP_lattice_generator
 export GKP_logical_operator_generator, GKP_logical_operator_generator_canonical
 export distance_X, distance_Y, distance_Z, distance, distances

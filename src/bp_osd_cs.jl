@@ -48,6 +48,17 @@ function _bp_osd_setup(
     R, s_reduced, row_pivots = gf2_rref_with_rhs(H, s)
     rank_H = length(row_pivots)
 
+    # Detect inconsistency: after RREF, rows below rank_H should have all-zero
+    # H-part.  If any such row has a nonzero RHS bit, the system H e = s has no
+    # solution over GF(2), meaning the syndrome is not in the column space of H.
+    inconsistent_rows = 0
+    for i in (rank_H + 1):num_checks
+        if s_reduced[i] != 0
+            inconsistent_rows += 1
+        end
+    end
+    is_consistent = inconsistent_rows == 0
+
     H_reduced = rank_H == 0 ? zeros(Int64, 0, num_bits) : R[1:rank_H, :]
     s_reduced = rank_H == 0 ? Int64[] : s_reduced[1:rank_H]
 
@@ -82,6 +93,8 @@ function _bp_osd_setup(
         base_basis_solution=base_basis_solution,
         delta_basis=delta_basis,
         order=order,
+        is_consistent=is_consistent,
+        inconsistent_rows=inconsistent_rows,
     )
 end
 
@@ -176,6 +189,16 @@ function osd_decode(
     rank_H = setup.rank
     kprime = length(remainder)
 
+    if !setup.is_consistent
+        error(
+            "The syndrome is not in the column space of H: the system H e = s (mod 2) " *
+            "has no solution ($(setup.inconsistent_rows) inconsistent row(s) after RREF, " *
+            "rank(H) = $rank_H / $(num_checks) rows). " *
+            "This typically means the decoding matrix does not span all reachable " *
+            "syndromes — check the circuit-to-detector front end."
+        )
+    end
+
     best_basis_bits = copy(setup.base_basis_solution)
     best_remainder_positions = Int64[]
     best_hamming_weight = count(!iszero, setup.base_basis_solution)
@@ -226,8 +249,13 @@ function osd_decode(
         candidate[remainder[pos]] = 1
     end
 
-    if mod.(H * candidate, 2) != s
-        error("Internal error: the OSD candidate does not satisfy the syndrome equation.")
+    residual = mod.(H * candidate, 2)
+    if residual != s
+        error(
+            "Internal error: OSD candidate does not satisfy H e = s (mod 2) " *
+            "(residual weight = $(count(!=(0), residual .- s))). " *
+            "This is a bug in OSD — the consistency check passed but the solution is wrong."
+        )
     end
 
     return (
